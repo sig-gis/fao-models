@@ -1,0 +1,174 @@
+import ee
+import os
+# import geemap
+from pprint import pprint
+
+# from google.colab import auth
+from google.api_core import retry
+# from IPython.display import Image
+from matplotlib import pyplot as plt
+# from numpy.lib import recfunctions as rfn
+
+import concurrent
+import google
+import io
+import multiprocessing
+import numpy as np
+import requests
+import tensorflow as tf
+
+@retry.Retry()
+def get_patch_gftiff(image,box:ee.Geometry,bands:list,output_file:str):
+  """ 
+  Return ee.Image.getDownloadURL response and a filename as a tuple for a GeoTIFF. filename is passed through for concurrent.futures multiprocessing jobs.
+  args:
+    image: ee.Image
+    box: ee.Geometry
+    bands: list(str)
+    output_file: str
+  """
+  url = image.getDownloadUrl({
+    'bands': bands,
+    'region': box,
+    'scale': 10,
+    'format': 'GEO_TIFF'
+    })
+  return (requests.get(url),output_file)
+
+def write_geotiff_dataset(image,boxes,bands):
+  """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
+  args:
+    image: ee.Image
+    boxes: ee.FeatureCollection
+    bands: list(str)
+  
+  """
+  EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=40) # max concurrent requests to high volume endpoint
+
+  # convert boxes FeatureCollection to ee.Geomtry's
+  patch_box_list = boxes.toList(boxes.size()).map(lambda f:ee.Feature(f).geometry()).getInfo() # list of ee.Geometry's
+  patch_box_list_filenames = [f'patch{list_index}.tif' for list_index in list(range(0,boxes.size().getInfo()))] # list of filenames
+
+  future_to_point = {
+  EXECUTOR.submit(get_patch_gftiff, image, box, bands, filename): (box,filename) for (box,filename) in zip(patch_box_list,patch_box_list_filenames)
+  }
+
+  for future in concurrent.futures.as_completed(future_to_point):
+    result = future.result()
+    resp = result[0]
+    filename = result[1]
+    with open(filename, 'wb') as fd:
+      fd.write(resp.content)
+
+def write_tfrecord_batch(image, patch_size, points, scale, output_file):
+  """Writes patches at a set of points to a TFRecord file, using ee.data.ComputePixels
+  args:
+    image: ee.Image
+    patch_size: int
+    points: list of ee.Geometry.Point objects, easily done with `pointFC.aggregate_array('.geo').getInfo()`
+    scale: int
+    output_file: str
+  returns: None
+  """
+  # REPLACE WITH YOUR BUCKET!
+  OUTPUT_FILE = output_file
+
+  # Output resolution in meters.
+  SCALE = scale
+
+  # Pre-compute a geographic coordinate system.
+  proj = ee.Projection('EPSG:4326').atScale(SCALE).getInfo()
+
+  # Get scales in degrees out of the transform.
+  SCALE_X = proj['transform'][0]
+  SCALE_Y = -proj['transform'][4]
+
+  # Patch size in pixels.
+  PATCH_SIZE = patch_size
+
+  # Offset to the upper left corner.
+  OFFSET_X = -SCALE_X * PATCH_SIZE / 2
+  OFFSET_Y = -SCALE_Y * PATCH_SIZE / 2
+
+  # Request template for ee.data.ComputePixels
+  REQUEST = {
+        'fileFormat': 'NPY',
+        'grid': {
+            'dimensions': {
+                'width': PATCH_SIZE,
+                'height': PATCH_SIZE
+            },
+            'affineTransform': {
+                'scaleX': SCALE_X,
+                'shearX': 0,
+                'shearY': 0,
+                'scaleY': SCALE_Y,
+            },
+            'crsCode': proj['crs']
+        }
+    }
+
+  # Blue, green, red, NIR, AOT.
+  FEATURES = image.bandNames().getInfo()#['B2_median', 'B3_median', 'B4_median', 'B8_median', 'AOT_median']
+
+  # Specify the size and shape of patches expected by the model.
+  KERNEL_SHAPE = [PATCH_SIZE, PATCH_SIZE]
+  COLUMNS = [
+    tf.io.FixedLenFeature(shape=KERNEL_SHAPE, dtype=tf.float32) for k in FEATURES
+  ]
+  FEATURES_DICT = dict(zip(FEATURES, COLUMNS))
+
+  EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=40) # max concurrent requests to high volume endpoint
+
+  # functions for batch .tfrecord writer workflow 
+  @retry.Retry()
+  def get_patch(coords, image,format='NPY'):
+    """Uses ee.data.ComputePixels() to get a patch centered on the coordinates, as a numpy array."""
+    request = dict(REQUEST)
+    request['fileFormat'] = format
+    request['expression'] = image
+    request['grid']['affineTransform']['translateX'] = coords[0] + OFFSET_X
+    request['grid']['affineTransform']['translateY'] = coords[1] + OFFSET_Y
+    return np.load(io.BytesIO(ee.data.computePixels(request)))
+
+  def get_sample_coords(roi, n):
+    """"Get a random sample of N points in the ROI."""
+    points = ee.FeatureCollection.randomPoints(region=roi, points=n, maxError=1)
+    return points.aggregate_array('.geo').getInfo()
+
+  def array_to_example(structured_array):
+    """"Serialize a structured numpy array into a tf.Example proto."""
+    feature = {}
+    for f in FEATURES:
+      feature[f] = tf.train.Feature(
+          float_list = tf.train.FloatList(
+              value = structured_array[f].flatten()))
+    return tf.train.Example(
+        features = tf.train.Features(feature = feature))
+
+
+  def write_tf_dataset(image, sample_points, file_name):
+    """"Write patches at the sample points into one TFRecord file."""
+    future_to_point = {
+      EXECUTOR.submit(get_patch, point['coordinates'], image): point for point in sample_points
+    }
+
+    # Optionally compress files.
+    writer = tf.io.TFRecordWriter(file_name)
+
+    for future in concurrent.futures.as_completed(future_to_point):
+        point = future_to_point[future]
+        try:
+            np_array = future.result()
+            example_proto = array_to_example(np_array)
+            writer.write(example_proto.SerializeToString())
+            writer.flush()
+        except Exception as e:
+            # print(e)
+            pass
+
+    writer.close()
+  
+  # write patches to .tfrecord file 
+  write_tf_dataset(image, points, OUTPUT_FILE)
+  return
