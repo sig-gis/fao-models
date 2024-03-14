@@ -1,7 +1,7 @@
 import ee
 import os
 import google.auth
-from serving import write_geotiff_dataset, write_tfrecord_batch
+from serving import write_geotiff_patch_from_boxes, write_tfrecord_batch, write_geotiff_patch_from_points
 # os.environ['TF_ENABLE_ONEDNN_OPTS=0']
 
 PROJECT = 'pc530-fao-fra-rss' # change to your cloud project name
@@ -74,8 +74,19 @@ sampleImage = (s2
     .select(['B4','B3','B2','B8','class'],['R','G','B','N','class'])) # B G R classlabel
 
 ## TESTING ##
-test_boxes = patch_boxes.limit(10)
-write_geotiff_dataset(sampleImage,test_boxes,['R','G','B','N','class'])
+ #TODO: save files specifically in data/ directory
+# Get the current working directory
+cwd = os.getcwd()
+# Get the parent directory
+parent_dir = os.path.dirname(cwd)
+# Set the data directory path
+data_dir = os.path.join(parent_dir, 'data')
 
-test_points = FNFhex_centroids.limit(10).aggregate_array('.geo').getInfo()
+# test_boxes = patch_boxes.limit(10)
+# write_geotiff_patch_from_boxes(sampleImage,test_boxes,['R','G','B','N','class'])
+
+# test_points = FNFhex_centroids.limit(10).aggregate_array('.geo').getInfo()
 # write_tfrecord_batch(sampleImage, 32, test_points, 10, 'test_tfrecord_batch')
+
+test_ee_points = FNFhex_centroids.limit(20000)
+write_geotiff_patch_from_points(sampleImage,test_ee_points,['R','G','B','N','class'],10,32,output_directory=data_dir)

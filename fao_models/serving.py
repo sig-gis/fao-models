@@ -1,13 +1,7 @@
 import ee
 import os
-# import geemap
-from pprint import pprint
-
 # from google.colab import auth
 from google.api_core import retry
-# from IPython.display import Image
-from matplotlib import pyplot as plt
-# from numpy.lib import recfunctions as rfn
 
 import concurrent
 import google
@@ -17,10 +11,32 @@ import numpy as np
 import requests
 import tensorflow as tf
 
-@retry.Retry()
-def get_patch_gftiff(image,box:ee.Geometry,bands:list,output_file:str):
+@retry.Retry(deadline=10*60) # seconds
+def get_tiff_patch_url_file_point(image: ee.Image, point: ee.Geometry, bands: list, scale:int, patch_size: int, output_file:str):
   """ 
-  Return ee.Image.getDownloadURL response and a filename as a tuple for a GeoTIFF. filename is passed through for concurrent.futures multiprocessing jobs.
+  Return ee.Image.getDownloadURL response and a filename as a tuple for a GeoTIFF. filename is passed through for concurrent.futures multiprocessing jobs. Uses points rather than polygons.
+  args:
+    image: ee.Image
+    box: ee.Geometry
+    bands: list(str)
+    output_file: str
+  """
+  # Create the URL to download the band values of the patch of pixels.
+  point = ee.Geometry(point)
+  region = point.buffer(scale * patch_size / 2, 1).bounds(1)
+  
+  url = image.getDownloadURL({
+      "region": region,
+      "dimensions": [patch_size, patch_size],
+      "format": "GEO_TIFF",
+      "bands": bands,
+  })
+  return (requests.get(url), output_file)
+
+@retry.Retry()
+def get_tiff_patch_url_file_box(image,box:ee.Geometry,bands:list,output_file:str):
+  """ 
+  Return ee.Image.getDownloadURL response and a filename as a tuple for a GeoTIFF. filename is passed through for concurrent.futures multiprocessing jobs. Uses polygons (boxes) rather than points.
   args:
     image: ee.Image
     box: ee.Geometry
@@ -35,7 +51,7 @@ def get_patch_gftiff(image,box:ee.Geometry,bands:list,output_file:str):
     })
   return (requests.get(url),output_file)
 
-def write_geotiff_dataset(image,boxes,bands):
+def write_geotiff_patch_from_boxes(image,boxes,bands,output_directory):
   """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
   args:
     image: ee.Image
@@ -47,10 +63,36 @@ def write_geotiff_dataset(image,boxes,bands):
 
   # convert boxes FeatureCollection to ee.Geomtry's
   patch_box_list = boxes.toList(boxes.size()).map(lambda f:ee.Feature(f).geometry()).getInfo() # list of ee.Geometry's
-  patch_box_list_filenames = [f'patch{list_index}.tif' for list_index in list(range(0,boxes.size().getInfo()))] # list of filenames
+  #TODO: save files specifically in data/ directory
+  patch_box_list_filenames = [os.path.join(output_directory,f'patch_box{list_index}.tif') for list_index in list(range(0,boxes.size().getInfo()))] # list of filenames
 
   future_to_point = {
-  EXECUTOR.submit(get_patch_gftiff, image, box, bands, filename): (box,filename) for (box,filename) in zip(patch_box_list,patch_box_list_filenames)
+  EXECUTOR.submit(get_tiff_patch_url_file_box, image, box, bands, filename): (box,filename) for (box,filename) in zip(patch_box_list,patch_box_list_filenames)
+  }
+
+  for future in concurrent.futures.as_completed(future_to_point):
+    result = future.result()
+    resp = result[0]
+    filename = result[1]
+    with open(filename, 'wb') as fd:
+      fd.write(resp.content)
+
+def write_geotiff_patch_from_points(image,points,bands,scale,patch_size,output_directory):
+  """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
+  args:
+    image: ee.Image
+    points: ee.FeatureCollection
+    bands: list(str)
+  
+  """
+  EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=40) # max concurrent requests to high volume endpoint
+
+  # convert points FeatureCollection to ee.Geomtry's
+  patch_pt_list = points.toList(points.size()).map(lambda f:ee.Feature(f).geometry()).getInfo() # list of ee.Geometry's
+  patch_pt_list_filenames = [os.path.join(output_directory,f'patch_pt{list_index}.tif') for list_index in list(range(0,points.size().getInfo()))] # list of filenames
+
+  future_to_point = {
+  EXECUTOR.submit(get_tiff_patch_url_file_point, image, pt, bands, scale, patch_size, filename): (pt,filename) for (pt,filename) in zip(patch_pt_list,patch_pt_list_filenames)
   }
 
   for future in concurrent.futures.as_completed(future_to_point):
@@ -65,7 +107,7 @@ def write_tfrecord_batch(image, patch_size, points, scale, output_file):
   args:
     image: ee.Image
     patch_size: int
-    points: list of ee.Geometry.Point objects, easily done with `pointFC.aggregate_array('.geo').getInfo()`
+    points: python list of ee.Geometry.Point objects, easily done with `pointFC.aggregate_array('.geo').getInfo()`
     scale: int
     output_file: str
   returns: None
