@@ -1,5 +1,4 @@
 #%%
-from array_split_input_targets import get_geotiff_data
 import os
 import rasterio
 import numpy as np
@@ -11,8 +10,32 @@ from tensorflow.data import Dataset
 from tensorflow.keras import backend as backend
 from tensorflow.keras.metrics import categorical_accuracy
 
+def split_inputs_targets(element):
+            inputs = element[..., :-1]  # All but the last value in the innermost array
+            targets = element[..., -1]  # The last value in the innermost array
+            return inputs, targets
+
+# Convert numpy array to TensorFlow Dataset
+# training_data = tf.data.Dataset.from_tensor_slices(training_data) # - this was not a valid x for model.fit()
+
+# having trouble turning my numpy array of shape (batchsize, 32, 32, 5) into the tf.Dataset format of tuple(inputs, targets)
+# needed for model.fit() https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit
+    
+# this might work? hard to tell what's causing the error in model.fit()
+def convert_to_tf_dataset(training_data, batch_size):
+
+    inputs, targets = split_inputs_targets(training_data)
+
+    # Convert numpy arrays to TensorFlow Datasets
+    inputs_dataset = tf.data.Dataset.from_tensor_slices(inputs)
+    targets_dataset = tf.data.Dataset.from_tensor_slices(targets)
+
+    # Zip the inputs and targets together to get a dataset of (input, target) pairs, then batches the tf.Dataset
+    dataset = tf.data.Dataset.zip((inputs_dataset, targets_dataset)).batch(batch_size)
+    return dataset
+
 # data loader for training,validation,test data, 
-def get_geotiff_data(folder_path, num_geotiffs=10):
+def get_geotiff_data(folder_path, num_geotiffs=100, batch_size=10):
     """Data loader; reads GeoTiff files from a folder and returns a TensorFlow Dataset."""
     # List to store the formatted training data batches
     training_data_batches = []
@@ -50,31 +73,8 @@ def get_geotiff_data(folder_path, num_geotiffs=10):
     training_data = np.concatenate(training_data_batches, axis=0)
     # print(training_data.shape)
     # print(training_data)
-
-    # Convert numpy array to TensorFlow Dataset
-    # training_data = tf.data.Dataset.from_tensor_slices(training_data) # - this was not a valid x for model.fit()
-    
-    # having trouble turning my numpy array of shape (batchsize, 32, 32, 5) into the tf.Dataset format of tuple(inputs, targets)
-    # needed for model.fit() https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit
-    
-    # this might work? hard to tell what's causing the error in model.fit()
-    def convert_to_tf_dataset(training_data):
-        def split_inputs_targets(element):
-            inputs = element[..., :-1]  # All but the last value in the innermost array
-            targets = element[..., -1]  # The last value in the innermost array
-            return inputs, targets
-
-        inputs, targets = split_inputs_targets(training_data)
-
-        # Convert numpy arrays to TensorFlow Datasets
-        inputs_dataset = tf.data.Dataset.from_tensor_slices(inputs)
-        targets_dataset = tf.data.Dataset.from_tensor_slices(targets)
-
-        # Zip the inputs and targets together to get a dataset of (input, target) pairs
-        dataset = tf.data.Dataset.zip((inputs_dataset, targets_dataset))
-        return dataset
-    
-    return convert_to_tf_dataset(training_data)
+    # return training_data
+    return convert_to_tf_dataset(training_data, batch_size)
 #%%
 # Model architecture
 # Ate's crop mapping architecture - minus decoder blocks
@@ -136,10 +136,13 @@ def get_model():
     encoder4_pool, encoder4 = encoder_block(encoder3_pool, 256)
     center = conv_block(encoder4_pool, 512)
 
-    # no decoder block
+    # NO DECODER BLOCK
     
-    outputs = layers.Conv2D(2, (1, 1), activation='sigmoid')(center) # 2 values as output?
-    # outputs = layers.Conv2D(1, (1, 1), activation='sigmoid')(center) # or 1 value output?
+    # with this i was getting error: ValueError: `logits` and `labels` must have the same shape, received ((None, 1, 1, 2) vs (None, 32, 32)).
+    # outputs = layers.Conv2D(2, (1, 1), activation='sigmoid')(center) # 2 values output
+    
+    # with this, the model will train.
+    outputs = layers.Conv2D(1, (1, 1), activation='sigmoid')(center) # 1 value output
 
     model = models.Model(inputs=[inputs], outputs=[outputs])
 
@@ -160,13 +163,19 @@ training_path = r"C:\fao-models\data\training"
 validation_path = r"C:\fao-models\data\validation"
 
 # Number of GeoTiffs to read
+num_tiffs = 100
 batch_size = 10
 epochs = 10
 
-training_data = get_geotiff_data(training_path,batch_size)
-validation_data = get_geotiff_data(validation_path,batch_size)
-print(training_data)
+training_data = get_geotiff_data(training_path,num_tiffs,batch_size)
+validation_data = get_geotiff_data(validation_path,num_tiffs,batch_size)
 
+# check the data out
+print('training data type',type(training_data))
+print(training_data)
+for element in training_data:
+    print(element)
+    break
 # %%
 model.fit(
 training_data,
