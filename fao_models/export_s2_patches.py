@@ -2,6 +2,8 @@ import ee
 import os
 import google.auth
 from serving import write_geotiff_patch_from_boxes, write_tfrecord_batch, write_geotiff_patch_from_points
+import os
+import os
 # os.environ['TF_ENABLE_ONEDNN_OPTS=0']
 
 PROJECT = 'pc530-fao-fra-rss' # change to your cloud project name
@@ -73,14 +75,13 @@ sampleImage = (s2
     .addBands(hexLabel)
     .select(['B4','B3','B2','B8','class'],['R','G','B','N','class'])) # B G R classlabel
 
-## TESTING ##
- #TODO: save files specifically in data/ directory
-# Get the current working directory
-cwd = os.getcwd()
+## TESTING ################################################################
+current_file = __file__
 # Get the parent directory
-parent_dir = os.path.dirname(cwd)
-# Set the data directory path
+parent_dir = os.path.dirname(os.path.dirname(__file__))
 data_dir = os.path.join(parent_dir, 'data')
+if not os.path.exists(data_dir):
+    os.makedirs(data_dir)
 
 # test_boxes = patch_boxes.limit(10)
 # write_geotiff_patch_from_boxes(sampleImage,test_boxes,['R','G','B','N','class'])
@@ -88,5 +89,16 @@ data_dir = os.path.join(parent_dir, 'data')
 # test_points = FNFhex_centroids.limit(10).aggregate_array('.geo').getInfo()
 # write_tfrecord_batch(sampleImage, 32, test_points, 10, 'test_tfrecord_batch')
 
-test_ee_points = FNFhex_centroids.limit(20000)
-write_geotiff_patch_from_points(sampleImage,test_ee_points,['R','G','B','N','class'],10,32,output_directory=data_dir)
+# we have about a 1/3 to 2/3 split of forest / nonforest makeup of total hexagons
+ee_points_forest = hexForest.map(lambda h: ee.Feature(h.geometry().centroid())).randomColumn().sort('random')
+ee_points_nonforest = hexNonForest.map(lambda h: ee.Feature(h.geometry().centroid())).randomColumn().sort('random')
+# print(ee_points_forest.size().getInfo())
+# print(ee_points_nonforest.size().getInfo())
+
+ee_points_forest_test = ee_points_forest.limit(10000)
+ee_points_nonforest_test = ee_points_nonforest.limit(10000)
+
+# we write forest and nonforest patches to data\ directory, 
+# patch filenames are also suffixed with 'forest' or 'nonforest'
+write_geotiff_patch_from_points(sampleImage,ee_points_forest_test,['R','G','B','N'],10,32,output_directory=data_dir, suffix='forest')
+write_geotiff_patch_from_points(sampleImage,ee_points_nonforest_test,['R','G','B','N'],10,32,output_directory=data_dir, suffix='nonforest')

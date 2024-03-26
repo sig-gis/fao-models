@@ -11,7 +11,7 @@ import numpy as np
 import requests
 import tensorflow as tf
 
-@retry.Retry(deadline=10*60) # seconds
+@retry.Retry()
 def get_tiff_patch_url_file_point(image: ee.Image, point: ee.Geometry, bands: list, scale:int, patch_size: int, output_file:str):
   """ 
   Return ee.Image.getDownloadURL response and a filename as a tuple for a GeoTIFF. filename is passed through for concurrent.futures multiprocessing jobs. Uses points rather than polygons.
@@ -63,7 +63,7 @@ def write_geotiff_patch_from_boxes(image,boxes,bands,output_directory):
 
   # convert boxes FeatureCollection to ee.Geomtry's
   patch_box_list = boxes.toList(boxes.size()).map(lambda f:ee.Feature(f).geometry()).getInfo() # list of ee.Geometry's
-  #TODO: save files specifically in data/ directory
+  # TODO: split into train/val/test folders within data/ directory
   patch_box_list_filenames = [os.path.join(output_directory,f'patch_box{list_index}.tif') for list_index in list(range(0,boxes.size().getInfo()))] # list of filenames
 
   future_to_point = {
@@ -77,7 +77,7 @@ def write_geotiff_patch_from_boxes(image,boxes,bands,output_directory):
     with open(filename, 'wb') as fd:
       fd.write(resp.content)
 
-def write_geotiff_patch_from_points(image,points,bands,scale,patch_size,output_directory):
+def write_geotiff_patch_from_points(image,points,bands,scale,patch_size,output_directory,suffix=None):
   """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
   args:
     image: ee.Image
@@ -86,10 +86,10 @@ def write_geotiff_patch_from_points(image,points,bands,scale,patch_size,output_d
   
   """
   EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=40) # max concurrent requests to high volume endpoint
-
+  
   # convert points FeatureCollection to ee.Geomtry's
   patch_pt_list = points.toList(points.size()).map(lambda f:ee.Feature(f).geometry()).getInfo() # list of ee.Geometry's
-  patch_pt_list_filenames = [os.path.join(output_directory,f'patch_pt{list_index}.tif') for list_index in list(range(0,points.size().getInfo()))] # list of filenames
+  patch_pt_list_filenames = [os.path.join(output_directory,f'patch_pt{list_index}_{suffix}.tif') for list_index in list(range(0,points.size().getInfo()))] # list of filenames
 
   future_to_point = {
   EXECUTOR.submit(get_tiff_patch_url_file_point, image, pt, bands, scale, patch_size, filename): (pt,filename) for (pt,filename) in zip(patch_pt_list,patch_pt_list_filenames)
