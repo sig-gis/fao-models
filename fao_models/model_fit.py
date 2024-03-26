@@ -1,80 +1,12 @@
 #%%
+from dataloader import *
 import os
-import rasterio
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras import layers, models, optimizers
 from tensorflow.data import Dataset
 from tensorflow.keras import backend as backend
 from tensorflow.keras.metrics import categorical_accuracy
-
-def split_inputs_targets(element):
-            inputs = element[..., :-1]  # All but the last value in the innermost array
-            targets = element[..., -1]  # The last value in the innermost array
-            return inputs, targets
-
-# Convert numpy array to TensorFlow Dataset
-# training_data = tf.data.Dataset.from_tensor_slices(training_data) # - this was not a valid x for model.fit()
-
-# having trouble turning my numpy array of shape (batchsize, 32, 32, 5) into the tf.Dataset format of tuple(inputs, targets)
-# needed for model.fit() https://www.tensorflow.org/api_docs/python/tf/keras/Model#fit
-    
-# this might work? hard to tell what's causing the error in model.fit()
-def convert_to_tf_dataset(training_data, batch_size):
-
-    inputs, targets = split_inputs_targets(training_data)
-
-    # Convert numpy arrays to TensorFlow Datasets
-    inputs_dataset = tf.data.Dataset.from_tensor_slices(inputs)
-    targets_dataset = tf.data.Dataset.from_tensor_slices(targets)
-
-    # Zip the inputs and targets together to get a dataset of (input, target) pairs, then batches the tf.Dataset
-    dataset = tf.data.Dataset.zip((inputs_dataset, targets_dataset)).batch(batch_size)
-    return dataset
-
-# data loader for training,validation,test data, 
-def get_geotiff_data(folder_path, num_geotiffs=100, batch_size=10):
-    """Data loader; reads GeoTiff files from a folder and returns a TensorFlow Dataset."""
-    # List to store the formatted training data batches
-    training_data_batches = []
-
-    # Iterate over the GeoTiffs in the folder
-    for filename in os.listdir(folder_path)[:num_geotiffs]:
-        if filename.endswith(".tif"):
-            # Open the GeoTiff file, move on if can't open the file or the raster dataset doesn't have expected shape
-            try:
-                file_path = os.path.join(folder_path, filename)
-                with rasterio.open(file_path) as dataset:
-                    raster_data = dataset.read() # R G B N label # 
-                    if raster_data.shape != (5, 32, 32): # Skip the GeoTiff if it does not have the expected shape
-                        continue
-                # print(raster_data.shape) # shape is (bands, rows, columns)
-            except:
-                continue
-            
-            # Reshape the raster data to match TensorFlow's input shape (batch_size, height, width, channels)
-            raster_data = np.transpose(raster_data, (1, 2, 0))
-            raster_data = np.expand_dims(raster_data, axis=0)
-            
-            # is this recommended? not doing it at moment
-            # Normalize the raster data between 0 and 1
-            # scaler = MinMaxScaler()
-            # raster_data = scaler.fit_transform(raster_data.reshape(-1, raster_data.shape[-1]))
-            
-            raster_data = raster_data.reshape(raster_data.shape[0], raster_data.shape[1], raster_data.shape[2], -1)
-            
-            # Add the formatted training data batch to the list
-            training_data_batches.append(raster_data)
-
-
-    # Concatenate the training data batches along the batch axis
-    training_data = np.concatenate(training_data_batches, axis=0)
-    # print(training_data.shape)
-    # print(training_data)
-    # return training_data
-    return convert_to_tf_dataset(training_data, batch_size)
 #%%
 # Model architecture
 # Ate's crop mapping architecture - minus decoder blocks
@@ -139,48 +71,75 @@ def get_model():
     # NO DECODER BLOCK
     
     # with this i was getting error: ValueError: `logits` and `labels` must have the same shape, received ((None, 1, 1, 2) vs (None, 32, 32)).
-    # outputs = layers.Conv2D(2, (1, 1), activation='sigmoid')(center) # 2 values output
+    # outputs = layers.Conv2D(2, (1, 1), activation='softmax')(center) # 2 values output
     
-    # with this, the model will train.
-    outputs = layers.Conv2D(1, (1, 1), activation='sigmoid')(center) # 1 value output
+    # with this, not one-hot encoded labels, and binary_crossentropy loss fn, the model will train but not correctly.
+    # outputs = layers.Conv2D(1, (1, 1), activation='sigmoid')(center) # 1 value output
 
+    # to try and solve ValueError: Shapes (None, 32, 32, 2) and (None, 1, 1, 2) are incompatible, 
+    # do we need to flatten the center layer with Dense?
+    outputs = layers.Dense(2, activation='softmax')(center) # 2 values output
+    # now getting ValueError: Shapes (None, 1, 2) and (None, 1, 1, 2) are incompatible
+    outputs = tf.squeeze(outputs) # Kyle Dormans suggestion
     model = models.Model(inputs=[inputs], outputs=[outputs])
 
     model.compile(
         optimizer=optimizer,
-        loss='binary_crossentropy', # Ate used dice_loss, found binary_crossentropy for binary classification in a tutorial..
+        loss='categorical_crossentropy', # Ate used dice_loss, found binary_crossentropy for binary classification in a tutorial..
         metrics=evaluation_metrics
     )
 
     return model
 
 model = get_model()
-print(model.summary())
+# print(model.summary())
 #%%
 # Model training
 # Path to the folder containing GeoTiff files
-training_path = r"C:\fao-models\data\training"
-validation_path = r"C:\fao-models\data\validation"
+# training_path = r"C:\fao-models\data\training"
+# validation_path = r"C:\fao-models\data\validation"
+data_path = r"C:\fao-models\data"
 
 # Number of GeoTiffs to read
-num_tiffs = 100
-batch_size = 10
-epochs = 10
+num_tiffs = 7500
+batch_size = 50
+epochs = 18
 
-training_data = get_geotiff_data(training_path,num_tiffs,batch_size)
-validation_data = get_geotiff_data(validation_path,num_tiffs,batch_size)
+all_data = get_geotiff_data_single_label(data_path,num_tiffs)
+all_data = all_data.map(one_hot_encode_binary)
+
+# Split the data into training and validation sets
+train,val = train_test_split_filter_map(all_data)
+train = train.batch(batch_size)
+val = val.batch(batch_size)
+
+# training_data = get_geotiff_data_single_label(training_path,num_tiffs,batch_size)
+# training_data = training_data.map(one_hot_encode_binary)
+
+# validation_data = get_geotiff_data_single_label(validation_path,num_tiffs,batch_size)
+# validation_data = validation_data.map(one_hot_encode_binary)
 
 # check the data out
-print('training data type',type(training_data))
-print(training_data)
-for element in training_data:
-    print(element)
-    break
+# print('training data type',type(training_data))
+# print(training_data)
+# for element in training_data:
+#     print(element)
+#     break
 # %%
+LOGS_DIR = '.\logs'
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+callbacks = [tf.keras.callbacks.TensorBoard(log_dir=LOGS_DIR, histogram_freq=1)]
+
 model.fit(
-training_data,
-validation_data=validation_data,
-epochs=epochs,  # You might want to use the EPOCHS variable here
-# callbacks=[tf.keras.callbacks.TensorBoard(LOGS_DIR)]
+train,
+validation_data=val,
+epochs=epochs,
+shuffle=True,
+callbacks=[tf.keras.callbacks.TensorBoard(LOGS_DIR)]
 )
 # %%
+# saved_models_dir = os.path.join(os.getcwd(), 'saved_models')
+# if not os.path.exists(saved_models_dir):
+#     os.makedirs(saved_models_dir)
+# model.save(os.path.join(saved_models_dir,'modelv1_10k_train_test_set'))
