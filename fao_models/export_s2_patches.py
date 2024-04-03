@@ -131,14 +131,16 @@ def main():
         os.makedirs(args.output_dir)
 
     # we have about a 1/3 to 2/3 split of forest / nonforest makeup of total hexagons
+    # set seed so we can reproduce list and skip exports that have finished.
+    seed = 42
     ee_points_forest = (
         hexForest.map(lambda h: ee.Feature(h.geometry().centroid()))
-        .randomColumn()
+        .randomColumn(seed=seed)
         .sort("random")
     )
     ee_points_nonforest = (
         hexNonForest.map(lambda h: ee.Feature(h.geometry().centroid()))
-        .randomColumn()
+        .randomColumn(seed=seed)
         .sort("random")
     )
 
