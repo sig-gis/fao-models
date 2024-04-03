@@ -1,7 +1,7 @@
 import ee
 import os
 # from google.colab import auth
-from google.api_core import retry
+from google.api_core import exceptions, retry
 
 import concurrent
 import google
@@ -10,8 +10,10 @@ import multiprocessing
 import numpy as np
 import requests
 import tensorflow as tf
+import requests
+# import exceptions # where do we import this from?
 
-@retry.Retry()
+@retry.Retry(deadline=60*10)
 def get_tiff_patch_url_file_point(image: ee.Image, point: ee.Geometry, bands: list, scale:int, patch_size: int, output_file:str):
   """ 
   Return ee.Image.getDownloadURL response and a filename as a tuple for a GeoTIFF. filename is passed through for concurrent.futures multiprocessing jobs. Uses points rather than polygons.
@@ -26,12 +28,16 @@ def get_tiff_patch_url_file_point(image: ee.Image, point: ee.Geometry, bands: li
   region = point.buffer(scale * patch_size / 2, 1).bounds(1)
   
   url = image.getDownloadURL({
-      "region": region,
-      "dimensions": [patch_size, patch_size],
-      "format": "GEO_TIFF",
-      "bands": bands,
+    "region": region,
+    "dimensions": [patch_size, patch_size],
+    "format": "GEO_TIFF",
+    "bands": bands,
   })
-  return (requests.get(url), output_file)
+  response = requests.get(url)
+  if response.status_code == 429:
+    raise exceptions.TooManyRequests(response.text)
+  response.raise_for_status()
+  return (response, output_file)
 
 @retry.Retry()
 def get_tiff_patch_url_file_box(image,box:ee.Geometry,bands:list,output_file:str):
@@ -77,12 +83,56 @@ def write_geotiff_patch_from_boxes(image,boxes,bands,output_directory):
     with open(filename, 'wb') as fd:
       fd.write(resp.content)
 
+def write_geotiff_patch_from_points_v2(image,points,bands,scale,patch_size,output_directory,suffix=None,num_workers=10):
+  """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
+  args:
+    image: ee.Image
+    points: ee.FeatureCollection
+    bands: list(str)
+    scale: int
+    patch_size: int
+    output_directory: str
+    suffix: str
+  
+  """
+  with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor: # max concurrent requests to high volume endpoint is 40
+  
+    # convert points FeatureCollection to ee.Geomtry's
+    patch_pt_list = points.toList(points.size()).map(lambda f:ee.Feature(f).geometry()).getInfo() # list of ee.Geometry's
+    patch_pt_list_filenames = [os.path.join(output_directory,f'patch_pt{list_index}_{suffix}.tif') for list_index in list(range(0,points.size().getInfo()))] # list of filenames
+    pt_filename = zip(patch_pt_list,patch_pt_list_filenames)
+    # # don't write patches that already exist on disk
+    # pt_filename = [pf for pf in pt_filename if not os.path.exists(pf[1])]
+    
+    futures = {
+    executor.submit(get_tiff_patch_url_file_point, image, pt, bands, scale, patch_size, filename): 
+    (pt,filename) for (pt,filename) in pt_filename # zip(patch_pt_list,patch_pt_list_filenames)
+    }
+
+    for future in concurrent.futures.as_completed(futures):
+      try:
+        # get result of future with timeout of 120s
+        result = future.result(timeout=120)
+        resp = result[0]
+        filename = result[1]
+        with open(filename, 'wb') as fd:
+          fd.write(resp.content)
+      except concurrent.futures.TimeoutError:
+        print("The task exceeded 2-minute limit and was cancelled")
+      except Exception as e:
+        print(f"Generated an exception: {e}")
+      
+
 def write_geotiff_patch_from_points(image,points,bands,scale,patch_size,output_directory,suffix=None):
   """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
   args:
     image: ee.Image
     points: ee.FeatureCollection
     bands: list(str)
+    scale: int
+    patch_size: int
+    output_directory: str
+    suffix: str
   
   """
   EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=40) # max concurrent requests to high volume endpoint
@@ -91,6 +141,11 @@ def write_geotiff_patch_from_points(image,points,bands,scale,patch_size,output_d
   patch_pt_list = points.toList(points.size()).map(lambda f:ee.Feature(f).geometry()).getInfo() # list of ee.Geometry's
   patch_pt_list_filenames = [os.path.join(output_directory,f'patch_pt{list_index}_{suffix}.tif') for list_index in list(range(0,points.size().getInfo()))] # list of filenames
 
+  pt_filename = zip(patch_pt_list,patch_pt_list_filenames)
+
+  # don't write patches that already exist on disk
+  pt_filename = [pf for pf in pt_filename if not os.path.exists(pf[1])]
+  
   future_to_point = {
   EXECUTOR.submit(get_tiff_patch_url_file_point, image, pt, bands, scale, patch_size, filename): (pt,filename) for (pt,filename) in zip(patch_pt_list,patch_pt_list_filenames)
   }

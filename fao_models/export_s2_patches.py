@@ -1,12 +1,12 @@
 import ee
 import os
 import google.auth
-from serving import write_geotiff_patch_from_boxes, write_tfrecord_batch, write_geotiff_patch_from_points
+from serving import *
 import os
-import os
+import argparse
 # os.environ['TF_ENABLE_ONEDNN_OPTS=0']
 
-PROJECT = 'pc530-fao-fra-rss' # change to your cloud project name
+PROJECT = 'sig-ee-cloud' # change to your cloud project name
 ee.Initialize(project=PROJECT)
 
 ## INIT WITH HIGH VOLUME ENDPOINT
@@ -76,29 +76,62 @@ sampleImage = (s2
     .select(['B4','B3','B2','B8','class'],['R','G','B','N','class'])) # B G R classlabel
 
 ## TESTING ################################################################
-current_file = __file__
-# Get the parent directory
-parent_dir = os.path.dirname(os.path.dirname(__file__))
-data_dir = os.path.join(parent_dir, 'data')
-if not os.path.exists(data_dir):
-    os.makedirs(data_dir)
+def main():
+  # initalize new cli parser
+  parser = argparse.ArgumentParser(
+    description="Export S2 image patches."
+  )
 
-# test_boxes = patch_boxes.limit(10)
-# write_geotiff_patch_from_boxes(sampleImage,test_boxes,['R','G','B','N','class'])
+  parser.add_argument(
+    "-o",
+    "--output_dir",
+    type=str,
+    help="path to config file",
+  )
 
-# test_points = FNFhex_centroids.limit(10).aggregate_array('.geo').getInfo()
-# write_tfrecord_batch(sampleImage, 32, test_points, 10, 'test_tfrecord_batch')
+  parser.add_argument(
+    "-f",
+    "--forest",
+    dest="forest",
+    action="store_true",
+    help="export forest labeled patches",
+    required=False
+  )
+  
+  parser.add_argument(
+    "-nf",
+    "--nonforest",
+    dest="nonforest",
+    action="store_true",
+    help="export nonforest labeled patches",
+    required=False
+  )
+  args = parser.parse_args()
 
-# we have about a 1/3 to 2/3 split of forest / nonforest makeup of total hexagons
-ee_points_forest = hexForest.map(lambda h: ee.Feature(h.geometry().centroid())).randomColumn().sort('random')
-ee_points_nonforest = hexNonForest.map(lambda h: ee.Feature(h.geometry().centroid())).randomColumn().sort('random')
-# print(ee_points_forest.size().getInfo())
-# print(ee_points_nonforest.size().getInfo())
+  parser.set_defaults(forest=False)
+  parser.set_defaults(nonforest=False)
 
-ee_points_forest_test = ee_points_forest.limit(10000)
-ee_points_nonforest_test = ee_points_nonforest.limit(10000)
+  if not os.path.exists(args.output_dir):
+      os.makedirs(args.output_dir)
 
-# we write forest and nonforest patches to data\ directory, 
-# patch filenames are also suffixed with 'forest' or 'nonforest'
-write_geotiff_patch_from_points(sampleImage,ee_points_forest_test,['R','G','B','N'],10,32,output_directory=data_dir, suffix='forest')
-write_geotiff_patch_from_points(sampleImage,ee_points_nonforest_test,['R','G','B','N'],10,32,output_directory=data_dir, suffix='nonforest')
+  # we have about a 1/3 to 2/3 split of forest / nonforest makeup of total hexagons
+  ee_points_forest = hexForest.map(lambda h: ee.Feature(h.geometry().centroid())).randomColumn().sort('random')
+  ee_points_nonforest = hexNonForest.map(lambda h: ee.Feature(h.geometry().centroid())).randomColumn().sort('random')
+  
+  if not args.forest and not args.nonforest:
+    print('Please specify --forest and/or --nonforest')
+    exit()
+
+  if args.forest:
+    # for i in [0.,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]: # first chunk finishes then hangs..
+    #   print(f'exporting patches from points chunk {i}')
+    #   points_chunk = ee_points_forest.filter(ee.Filter.And(ee.Filter.gt('random',i),ee.Filter.lte('random',i+0.1)))
+    #   # print(points_chunk.size().getInfo())
+      # write_geotiff_patch_from_points_v2(sampleImage,points_chunk,['R','G','B','N'],10,32,output_directory=args.output_dir, suffix='forest')
+    write_geotiff_patch_from_points_v2(sampleImage,ee_points_forest,['R','G','B','N'],10,32,output_directory=args.output_dir, suffix='forest')
+
+  if args.nonforest:
+    write_geotiff_patch_from_points_v2(sampleImage,ee_points_nonforest,['R','G','B','N'],10,32,output_directory=args.output_dir, suffix='nonforest')
+
+if __name__ == "__main__":
+  main()
