@@ -3,6 +3,8 @@ data/
 tfrecords/
 logs/
 /**/*.png
+*.tif
+*.tiff
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
