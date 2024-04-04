@@ -112,6 +112,8 @@ def write_geotiff_patch_from_points_v2(
                 except Exception as e:
                     print(f"Loop - Generated an exception: {e}")
         except Exception as e:
+            # TODO - this still generates an exception when doing a long running (and finishing task)
+            #        Test to see if removing try/except will still allow task to finish.
             print(f"Outer - Generated an exception: {e}")
 
 
