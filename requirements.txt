@@ -1,3 +1,5 @@
 numpy
 tensorflow
 earthengine-api
+rasterio
+tqdm
