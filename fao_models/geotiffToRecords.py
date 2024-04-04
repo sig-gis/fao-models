@@ -48,7 +48,7 @@ def write_sharded_tfrecords(
     balance_strat: SplitStrategy = SplitStrategy.all,
 ):
     filenames = [f for f in os.listdir(folder_path) if f.endswith(".tif")]
-    if balance_strat.balanced:
+    if balance_strat.name == "balanced":
         filenames = balance_files(filenames)
 
     num_geotiffs = len(filenames)
@@ -93,7 +93,7 @@ def write_sharded_tfrecords(
 if __name__ == "__main__":
     tiff_path = r"data"
     tf_path_root = r"tfrecords"
-    balance_strat = SplitStrategy.balanced
+    balance_strat = SplitStrategy.all
     items_per_record = 1000  # Number of GeoTIFFs to store in each TFRecord file
 
     tf_path_strat = os.path.join(tf_path_root, balance_strat.name)
