@@ -1,20 +1,13 @@
 import concurrent.futures
-import ee
+
 import os
-
-# from google.colab import auth
-from google.api_core import exceptions, retry
-
-import concurrent
-import google
 import io
-import multiprocessing
+
+from google.api_core import exceptions, retry
+import ee
 import numpy as np
-import requests
 import tensorflow as tf
 import requests
-
-# import exceptions # where do we import this from?
 
 
 @retry.Retry(timeout=60 * 2)
@@ -55,60 +48,6 @@ def get_tiff_patch_url_file_point(
     return 1
 
 
-@retry.Retry()
-def get_tiff_patch_url_file_box(image, box: ee.Geometry, bands: list, output_file: str):
-    """
-    Return ee.Image.getDownloadURL response and a filename as a tuple for a GeoTIFF. filename is passed through for concurrent.futures multiprocessing jobs. Uses polygons (boxes) rather than points.
-    args:
-      image: ee.Image
-      box: ee.Geometry
-      bands: list(str)
-      output_file: str
-    """
-    url = image.getDownloadUrl(
-        {"bands": bands, "region": box, "scale": 10, "format": "GEO_TIFF"}
-    )
-    return (requests.get(url), output_file)
-
-
-def write_geotiff_patch_from_boxes(image, boxes, bands, output_directory):
-    """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
-    args:
-      image: ee.Image
-      boxes: ee.FeatureCollection
-      bands: list(str)
-
-    """
-    EXECUTOR = concurrent.futures.ThreadPoolExecutor(
-        max_workers=40
-    )  # max concurrent requests to high volume endpoint
-
-    # convert boxes FeatureCollection to ee.Geomtry's
-    patch_box_list = (
-        boxes.toList(boxes.size()).map(lambda f: ee.Feature(f).geometry()).getInfo()
-    )  # list of ee.Geometry's
-    # TODO: split into train/val/test folders within data/ directory
-    patch_box_list_filenames = [
-        os.path.join(output_directory, f"patch_box{list_index}.tif")
-        for list_index in list(range(0, boxes.size().getInfo()))
-    ]  # list of filenames
-
-    future_to_point = {
-        EXECUTOR.submit(get_tiff_patch_url_file_box, image, box, bands, filename): (
-            box,
-            filename,
-        )
-        for (box, filename) in zip(patch_box_list, patch_box_list_filenames)
-    }
-
-    for future in concurrent.futures.as_completed(future_to_point):
-        result = future.result()
-        resp = result[0]
-        filename = result[1]
-        with open(filename, "wb") as fd:
-            fd.write(resp.content)
-
-
 def write_geotiff_patch_from_points_v2(
     image,
     points,
@@ -117,7 +56,7 @@ def write_geotiff_patch_from_points_v2(
     patch_size,
     output_directory,
     suffix=None,
-    num_workers=40,
+    num_workers=10,
 ):
     """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
     args:
