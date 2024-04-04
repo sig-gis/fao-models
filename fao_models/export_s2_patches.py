@@ -149,11 +149,6 @@ def main():
         exit()
 
     if args.forest:
-        # for i in [0.,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]: # first chunk finishes then hangs..
-        #   print(f'exporting patches from points chunk {i}')
-        #   points_chunk = ee_points_forest.filter(ee.Filter.And(ee.Filter.gt('random',i),ee.Filter.lte('random',i+0.1)))
-        #   # print(points_chunk.size().getInfo())
-        # write_geotiff_patch_from_points_v2(sampleImage,points_chunk,['R','G','B','N'],10,32,output_directory=args.output_dir, suffix='forest')
         write_geotiff_patch_from_points_v2(
             sampleImage,
             ee_points_forest,

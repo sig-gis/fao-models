@@ -10,7 +10,7 @@ import tensorflow as tf
 import requests
 
 
-@retry.Retry(timeout=60 * 2)
+@retry.Retry()
 def get_tiff_patch_url_file_point(
     image: ee.Image,
     point: ee.Geometry,
