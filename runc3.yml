@@ -1,0 +1,12 @@
+experiment_name: "overfit-3"
+model_name: "resnet"
+data_dir: "tfrecords/balanced"
+total_examples: 77046 # number of geotiffs not tfrecords
+data_split: 0.2
+epochs: 50
+learning_rate: 0.01
+batch_size: 320
+buffer_size: 25
+optimizer: "adam"
+loss_function: "binary_crossentropy"
+early_stopping_patience: 7
