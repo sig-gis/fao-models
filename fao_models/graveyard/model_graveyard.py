@@ -1,3 +1,20 @@
+def model1(optimizer, loss_fn, metrics=[]):
+
+    model = models.Sequential(
+        [
+            layers.Input(shape=(32, 32, 4)),
+            layers.Flatten(),
+            layers.Dense(64, activation="relu"),
+            layers.Dense(1, activation="softmax"),
+        ]
+    )
+
+    model.compile(optimizer=optimizer, loss=loss_fn, metrics=metrics)
+
+    return model
+
+
+
 # Define your TensorFlow models here
 def cnn_v1_softmax_onehot(optimizer,loss_fn,metrics=['accuracy']):
     def conv_block(input_tensor, num_filters):
