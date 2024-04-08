@@ -2,4 +2,7 @@ numpy
 tensorflow
 earthengine-api
 rasterio
+pyyaml
+matplotlib
+scikit-learn
 tqdm
