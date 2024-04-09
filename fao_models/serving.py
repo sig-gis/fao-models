@@ -11,6 +11,117 @@ import requests
 
 
 @retry.Retry()
+def get_tiff_patch_url_file_point_least_cloudy(
+    imageColl: ee.ImageCollection,
+    point: ee.Geometry,
+    bands: list,
+    scale: int,
+    patch_size: int,
+    output_file: str,
+):
+    """
+    Return ee.Image.getDownloadURL response and a filename as a tuple for a GeoTIFF. filename is passed through for concurrent.futures multiprocessing jobs. Uses points rather than polygons.
+    args:
+      imageColl: ee.ImageCollection
+      point: ee.Geometry,
+      bands: list,
+      scale: int,
+      patch_size: int,
+      output_file: str,
+    """
+    # Create the URL to download the band values of the patch of pixels.
+    point = ee.Geometry(point)
+    region = point.buffer(scale * patch_size / 2, 1).bounds(1)
+    
+    # filter s2 collection on the fly per point to get least cloudy image
+    image = imageColl.filterBounds(point).sort("CLOUDY_PIXEL_PERCENTAGE").first()
+    
+    url = image.getDownloadURL(
+        {
+            "region": region,
+            "dimensions": [patch_size, patch_size],
+            "format": "GEO_TIFF",
+            "bands": bands,
+        }
+    )
+    response = requests.get(url)
+    if response.status_code == 429:
+        raise exceptions.TooManyRequests(response.text)
+    response.raise_for_status()
+    with open(output_file, "wb") as fd:
+        fd.write(response.content)
+    return 1
+
+def write_geotiff_patch_from_points_least_cloudy(
+    image,
+    points,
+    bands,
+    scale,
+    patch_size,
+    output_directory,
+    suffix=None,
+    num_workers=10,
+):
+    """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
+    args:
+      image: ee.Image 
+      points: ee.FeatureCollection
+      bands: list(str)
+      scale: int
+      patch_size: int
+      output_directory: str
+      suffix: str
+      num_workers: int
+    """
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=num_workers
+    ) as executor:  # max concurrent requests to high volume endpoint is 40
+        # convert points FeatureCollection to ee.Geomtry's
+        patch_pt_list = (
+            points.toList(points.size())
+            .map(lambda f: ee.Feature(f).geometry())
+            .getInfo()
+        )  # list of ee.Geometry's
+        patch_pt_list_filenames = [
+            os.path.join(output_directory, f"patch_pt{list_index}_{suffix}.tif")
+            for list_index in list(range(0, points.size().getInfo()))
+        ]  # list of filenames
+        pt_filename = zip(patch_pt_list, patch_pt_list_filenames)
+        # # don't write patches that already exist on disk
+        pt_filename = [pf for pf in pt_filename if not os.path.exists(pf[1])]
+        # end this stuff
+        futures = {
+            executor.submit(
+                get_tiff_patch_url_file_point_least_cloudy,
+                image,
+                pt,
+                bands,
+                scale,
+                patch_size,
+                filename,
+            ): (pt, filename)
+            for (
+                pt,
+                filename,
+            ) in pt_filename  # zip(patch_pt_list,patch_pt_list_filenames)
+        }
+        try:
+            for future in concurrent.futures.as_completed(futures, timeout=120):
+                try:
+                    # get result of future with timeout of 120s
+                    result = future.result(timeout=120)
+
+                except concurrent.futures.TimeoutError:
+                    print("The task exceeded 2-minute limit and was cancelled")
+                except Exception as e:
+                    print(f"Loop - Generated an exception: {e}")
+        except Exception as e:
+            # TODO - this still generates an exception when doing a long running (and finishing task)
+            #        Test to see if removing try/except will still allow task to finish.
+            print(f"Outer - Generated an exception: {e}")
+
+
+@retry.Retry()
 def get_tiff_patch_url_file_point(
     image: ee.Image,
     point: ee.Geometry,
@@ -48,7 +159,7 @@ def get_tiff_patch_url_file_point(
     return 1
 
 
-def write_geotiff_patch_from_points_v2(
+def write_geotiff_patch_from_points(
     image,
     points,
     bands,
@@ -60,14 +171,14 @@ def write_geotiff_patch_from_points_v2(
 ):
     """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
     args:
-      image: ee.Image
+      image: ee.Image 
       points: ee.FeatureCollection
       bands: list(str)
       scale: int
       patch_size: int
       output_directory: str
       suffix: str
-
+      num_workers: int
     """
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=num_workers
@@ -115,54 +226,6 @@ def write_geotiff_patch_from_points_v2(
             # TODO - this still generates an exception when doing a long running (and finishing task)
             #        Test to see if removing try/except will still allow task to finish.
             print(f"Outer - Generated an exception: {e}")
-
-
-def write_geotiff_patch_from_points(
-    image, points, bands, scale, patch_size, output_directory, suffix=None
-):
-    """Writes patches inside boxes a GEE Image within a FeatureCollection of boxes to individual GeoTIFFs
-    args:
-      image: ee.Image
-      points: ee.FeatureCollection
-      bands: list(str)
-      scale: int
-      patch_size: int
-      output_directory: str
-      suffix: str
-
-    """
-    EXECUTOR = concurrent.futures.ThreadPoolExecutor(
-        max_workers=40
-    )  # max concurrent requests to high volume endpoint
-
-    # convert points FeatureCollection to ee.Geomtry's
-    patch_pt_list = (
-        points.toList(points.size()).map(lambda f: ee.Feature(f).geometry()).getInfo()
-    )  # list of ee.Geometry's
-    patch_pt_list_filenames = [
-        os.path.join(output_directory, f"patch_pt{list_index}_{suffix}.tif")
-        for list_index in list(range(0, points.size().getInfo()))
-    ]  # list of filenames
-
-    pt_filename = zip(patch_pt_list, patch_pt_list_filenames)
-
-    # don't write patches that already exist on disk
-    pt_filename = [pf for pf in pt_filename if not os.path.exists(pf[1])]
-
-    future_to_point = {
-        EXECUTOR.submit(
-            get_tiff_patch_url_file_point, image, pt, bands, scale, patch_size, filename
-        ): (pt, filename)
-        for (pt, filename) in zip(patch_pt_list, patch_pt_list_filenames)
-    }
-
-    for future in concurrent.futures.as_completed(future_to_point):
-        result = future.result()
-        resp = result[0]
-        filename = result[1]
-        with open(filename, "wb") as fd:
-            fd.write(resp.content)
-
 
 def write_tfrecord_batch(image, patch_size, points, scale, output_file):
     """Writes patches at a set of points to a TFRecord file, using ee.data.ComputePixels
