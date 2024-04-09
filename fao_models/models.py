@@ -28,7 +28,7 @@ def plot_to_image(figure):
     return image
 
 
-def plot_confusion_matrix(cm, class_names):
+def plot_confusion_matrix(cm, class_names, count_forest, count_nonforest):
     """
     Returns a matplotlib figure containing the plotted confusion matrix.
 
@@ -38,7 +38,7 @@ def plot_confusion_matrix(cm, class_names):
     """
     figure = plt.figure(figsize=(8, 8))
     plt.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
-    plt.title("Confusion matrix")
+    plt.title(f"Confusion matrix: F-{count_forest} NF-{count_nonforest}")
     plt.colorbar()
     tick_marks = np.arange(len(class_names))
     plt.xticks(tick_marks, class_names, rotation=45)
@@ -74,11 +74,18 @@ class CmCallback(keras.callbacks.Callback):
         # Use the model to predict the values from the validation dataset.
         test_pred_raw = self.model.predict(self.test_images)
         test_pred = np.rint(test_pred_raw)
+        count_nf = sum(self.test_labels.numpy() == 0)
+        count_f = sum(self.test_labels.numpy() == 1)
 
         # Calculate the confusion matrix.
         cm = confusion_matrix(self.test_labels, test_pred)
         # Log the confusion matrix as an image summary.
-        figure = plot_confusion_matrix(cm, class_names=self.class_names)
+        figure = plot_confusion_matrix(
+            cm,
+            class_names=self.class_names,
+            count_forest=count_f,
+            count_nonforest=count_nf,
+        )
         cm_image = plot_to_image(figure)
 
         # Log the confusion matrix as an image summary.
@@ -129,22 +136,6 @@ def dice_loss(y_true, y_pred, smooth=1):
 evaluation_metrics = [categorical_accuracy, f1_m, precision_m, recall_m]
 
 
-def model1(optimizer, loss_fn, metrics=[]):
-
-    model = models.Sequential(
-        [
-            layers.Input(shape=(32, 32, 4)),
-            layers.Flatten(),
-            layers.Dense(64, activation="relu"),
-            layers.Dense(1, activation="softmax"),
-        ]
-    )
-
-    model.compile(optimizer=optimizer, loss=loss_fn, metrics=metrics)
-
-    return model
-
-
 def resnet(
     optimizer,
     loss_fn,
@@ -188,13 +179,84 @@ def resnet(
     return create_resnet_with_4_channels(input_shape=(32, 32, 4), num_classes=1)
 
 
+def mobilenet_v3small(
+    optimizer,
+    loss_fn,
+    metrics=[
+        dice_coef,
+        "binary_accuracy",
+    ],
+):
+    input_shape = (32, 32, 4)
+
+    base_model = tf.keras.applications.MobileNetV3Small(
+        input_shape=input_shape,
+        include_top=False,
+        weights=None,
+        classes=2,
+        include_preprocessing=False,
+    )
+    # Custom model
+    inputs = layers.Input(shape=input_shape)
+
+    # Pass the input to the base model
+    x = base_model(
+        inputs, training=True
+    )  # Set training=True to enable BatchNormalization layers
+
+    # Add custom top layers
+    x = layers.Flatten()(x)
+    x = layers.Dense(256, activation="relu")(x)
+    outputs = layers.Dense(1, activation="sigmoid")(x)
+    # Create the final model
+    model = models.Model(inputs=inputs, outputs=outputs)
+
+    model.compile(optimizer=optimizer, loss=loss_fn, metrics=metrics)
+
+    return model
+
+
+def vgg16(
+    optimizer,
+    loss_fn,
+    metrics=[
+        dice_coef,
+        "binary_accuracy",
+    ],
+):
+    input_shape = (32, 32, 4)
+    base_model = tf.keras.applications.VGG16(
+        include_top=False,
+        weights=None,
+        input_shape=input_shape,
+        classes=2,
+    )
+
+    # Custom model
+    inputs = layers.Input(shape=input_shape)
+
+    # Pass the input to the base model
+    x = base_model(
+        inputs, training=True
+    )  # Set training=True to enable BatchNormalization layers
+
+    # Add custom top layers
+    x = layers.Flatten()(x)
+    x = layers.Dense(256, activation="relu")(x)
+    outputs = layers.Dense(1, activation="sigmoid")(x)
+    # Create the final model
+    model = models.Model(inputs=inputs, outputs=outputs)
+
+    model.compile(optimizer=optimizer, loss=loss_fn, metrics=metrics)
+
+    return model
+
+
 # Create a dictionary of keyword-function pairs
 model_dict = {
-    "model1": model1,
     "resnet": resnet,
-    # in graveyard
-    # 'cnn_v1_softmax_onehot': cnn_v1_softmax_onehot,
-    # 'simple_model_sigmoid_onehot': simple_model_sigmoid_onehot,
+    "mobilenet_v3small": mobilenet_v3small,
+    "vgg16": vgg16,
 }
 
 
