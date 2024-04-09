@@ -27,6 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+
 def main():
 
     # initalize new cli parser
@@ -42,7 +43,7 @@ def main():
     args = parser.parse_args()
 
     config_file = args.config
-    
+
     with open(config_file, "r") as file:
         config_data = yaml.safe_load(file)
 
@@ -87,14 +88,13 @@ def main():
     logger.info(pformat(config_data))
 
     # Load the dataset without batching
-    dataset = dl.load_dataset_from_tfrecords(data_dir)
+    dataset = dl.load_dataset_from_tfrecords(data_dir, batch_size=batch_size)
 
     # Split the dataset into training and testing
     train_dataset, test_dataset = dl.split_dataset(
         dataset, total_examples, test_split=data_split, batch_size=batch_size
     )
     train_dataset = train_dataset.shuffle(buffer_size, reshuffle_each_iteration=True)
-
 
     logger.info("Starting model training...")
     LOGS_DIR = os.path.join(
@@ -117,12 +117,13 @@ def main():
     if early_stopping_patience is not None:
         logger.info(f"Using early stopping. Patience: {early_stopping_patience}")
         early_stop = tf.keras.callbacks.EarlyStopping(
-            monitor="val_loss", patience=early_stopping_patience, restore_best_weights=True
+            monitor="val_loss",
+            patience=early_stopping_patience,
+            restore_best_weights=True,
         )
         callbacks.append(early_stop)
     callbacks.append(cm_callback)
     callbacks.append(tf.keras.callbacks.TensorBoard(LOGS_DIR))
-
 
     history = model.fit(
         train_dataset,
@@ -134,6 +135,7 @@ def main():
     logger.info("Model training complete")
     logger.info("Training history:")
     logger.info(pformat(history.history))
+
 
 if __name__ == "__main__":
     main()
