@@ -8,11 +8,8 @@ import tensorflow as tf
 
 import yaml
 from pprint import pformat
-from functools import partial
 import argparse
 
-# # TODO: make this single CLI arg input
-# config_file = r"runc3.yml"
 
 # setup logging
 logging.basicConfig(
@@ -39,7 +36,13 @@ def main():
         type=str,
         help="path to .yml file",
     )
-
+    parser.add_argument(
+        "-t",
+        "--test",
+        type=bool,
+        default=False,
+        help="Run as a test. limits total examples to 5*batch_size and adds a test prefix to experiment name",
+    )
     args = parser.parse_args()
 
     config_file = args.config
@@ -61,6 +64,9 @@ def main():
     optimizer_use_lr_schedular = config_data["optimizer_use_lr_schedular"]
     loss_function = config_data["loss_function"]
     early_stopping_patience = config_data["early_stopping_patience"]
+    if args.test:
+        total_examples = batch_size * 5
+        experiment_name = f"TEST{experiment_name}"
 
     # hyperbolically decrease the learning rate to 1/2 of the base rate at 1,000 epochs, 1/3 at 2,000 epochs, and so on.
     if optimizer == "adam":
@@ -110,9 +116,19 @@ def main():
     class_names = ["nonforest", "forest"]
 
     # initialize and add tb callbacks
-    callbacks = []
     file_writer = tf.summary.create_file_writer(LOGS_DIR)
+    tb_callback = tf.keras.callbacks.TensorBoard(LOGS_DIR)
     cm_callback = CmCallback(y, x, class_names, file_writer)
+    save_model_callback = tf.keras.callbacks.ModelCheckpoint(
+        os.path.join(LOGS_DIR, "best_model.h5"),
+        monitor="val_loss",
+        verbose=0,
+        save_best_only=True,
+        save_weights_only=True,
+        mode="auto",
+        save_freq="epoch",
+    )
+    callbacks = [cm_callback, save_model_callback, tb_callback]
 
     if early_stopping_patience is not None:
         logger.info(f"Using early stopping. Patience: {early_stopping_patience}")
@@ -122,8 +138,6 @@ def main():
             restore_best_weights=True,
         )
         callbacks.append(early_stop)
-    callbacks.append(cm_callback)
-    callbacks.append(tf.keras.callbacks.TensorBoard(LOGS_DIR))
 
     history = model.fit(
         train_dataset,
