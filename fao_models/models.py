@@ -222,6 +222,12 @@ def vgg16():
     return model
 
 
+bce_sum = tf.keras.losses.BinaryCrossentropy(
+    from_logits=False,
+    label_smoothing=0.0,
+    axis=-1,
+    reduction="sum",
+)
 # Create a dictionary of keyword-function pairs
 model_dict = {
     "resnet": resnet,
@@ -229,7 +235,7 @@ model_dict = {
     "vgg16": vgg16,
 }
 
-custom_loss_funcs = {"dice_loss": dice_loss}
+custom_loss_funcs = {"dice_loss": dice_loss, "bce_sum": bce_sum}
 
 
 def get_model(model_name, **kwargs):
