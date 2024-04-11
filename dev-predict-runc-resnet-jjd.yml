@@ -1,7 +1,7 @@
 experiment_name: resnet-jjd-bce-sum-gap
 model_name: resnet
 data_dir: tfrecords/balanced
-checkpoint: logs/TESTresnet-jjd-bce-sum-gap/best_model.h5
+checkpoint: saved_models/TESTresnet-jjd-bce-sum-gap/best_model.h5
 total_examples: 77046 # number of geotiffs not tfrecords
 data_split: 0.2
 
