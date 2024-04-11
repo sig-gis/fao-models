@@ -76,7 +76,7 @@ def write_sharded_tfrecords(
                         image_raw = tf.io.serialize_tensor(
                             raster_data.astype(np.float32)
                         )
-                        label = 1 if "nonforest" in filename else 0
+                        label = 0 if "nonforest" in filename else 1
                         # print(filename)
                         # print(label)
                         label = tf.convert_to_tensor(label, dtype=tf.int64)
