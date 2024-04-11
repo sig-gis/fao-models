@@ -127,6 +127,7 @@ def dice_coef(y_true, y_pred, smooth=1):
 
 def dice_loss(y_true, y_pred, smooth=1):
     __name__ = "dice_loss"
+    y_true = tf.cast(y_true, tf.float32)
     intersection = backend.sum(backend.abs(y_true * y_pred), axis=-1)
     true_sum = backend.sum(backend.square(y_true), -1)
     pred_sum = backend.sum(backend.square(y_pred), -1)
@@ -136,57 +137,37 @@ def dice_loss(y_true, y_pred, smooth=1):
 evaluation_metrics = [categorical_accuracy, f1_m, precision_m, recall_m]
 
 
-def resnet(
-    optimizer,
-    loss_fn,
-    metrics=[
-        # f1_m,
-        dice_coef,
-        "binary_accuracy",
-    ],
-):
-    def create_resnet_with_4_channels(input_shape=(32, 32, 4), num_classes=1):
-        # Load the base ResNet model without the top (classifier) layers and without pre-trained weights
-        base_model = tf.keras.applications.ResNet50(
-            include_top=False,
-            weights=None,  # No pre-trained weights
-            classes=2,
-            input_shape=input_shape,  # Directly use 4-channel input shape
-        )
+def resnet():
 
-        # Custom model
-        inputs = layers.Input(shape=input_shape)
+    input_shape = (32, 32, 4)
+    # Load the base ResNet model without the top (classifier) layers and without pre-trained weights
+    base_model = tf.keras.applications.ResNet50(
+        include_top=False,
+        weights=None,  # No pre-trained weights
+        classes=2,
+        input_shape=input_shape,  # Directly use 4-channel input shape
+    )
 
-        # Pass the input to the base model
-        x = base_model(
-            inputs, training=True
-        )  # Set training=True to enable BatchNormalization layers
+    # Custom model
+    inputs = layers.Input(shape=input_shape)
 
-        # Add custom top layers
-        # x = layers.GlobalAveragePooling2D()(x)
-        x = layers.Flatten()(x)
-        x = layers.Dense(256, activation="relu")(x)
-        outputs = layers.Dense(num_classes, activation="sigmoid")(
-            x
-        )  # Use 'softmax' for multi-class
-        # Create the final model
-        model = models.Model(inputs=inputs, outputs=outputs)
+    # Pass the input to the base model
+    x = base_model(
+        inputs, training=True
+    )  # Set training=True to enable BatchNormalization layers
 
-        model.compile(optimizer=optimizer, loss=loss_fn, metrics=metrics)
+    # Add custom top layers
+    # x = layers.GlobalAveragePooling2D()(x)
+    x = layers.Flatten()(x)
+    x = layers.Dense(256, activation="relu")(x)
+    outputs = layers.Dense(1, activation="sigmoid")(x)  # Use 'softmax' for multi-class
+    # Create the final model
+    model = models.Model(inputs=inputs, outputs=outputs)
 
-        return model
-
-    return create_resnet_with_4_channels(input_shape=(32, 32, 4), num_classes=1)
+    return model
 
 
-def mobilenet_v3small(
-    optimizer,
-    loss_fn,
-    metrics=[
-        dice_coef,
-        "binary_accuracy",
-    ],
-):
+def mobilenet_v3small():
     input_shape = (32, 32, 4)
 
     base_model = tf.keras.applications.MobileNetV3Small(
@@ -211,19 +192,10 @@ def mobilenet_v3small(
     # Create the final model
     model = models.Model(inputs=inputs, outputs=outputs)
 
-    model.compile(optimizer=optimizer, loss=loss_fn, metrics=metrics)
-
     return model
 
 
-def vgg16(
-    optimizer,
-    loss_fn,
-    metrics=[
-        dice_coef,
-        "binary_accuracy",
-    ],
-):
+def vgg16():
     input_shape = (32, 32, 4)
     base_model = tf.keras.applications.VGG16(
         include_top=False,
@@ -247,11 +219,15 @@ def vgg16(
     # Create the final model
     model = models.Model(inputs=inputs, outputs=outputs)
 
-    model.compile(optimizer=optimizer, loss=loss_fn, metrics=metrics)
-
     return model
 
 
+bce_sum = tf.keras.losses.BinaryCrossentropy(
+    from_logits=False,
+    label_smoothing=0.0,
+    axis=-1,
+    reduction="sum",
+)
 # Create a dictionary of keyword-function pairs
 model_dict = {
     "resnet": resnet,
@@ -259,16 +235,23 @@ model_dict = {
     "vgg16": vgg16,
 }
 
+custom_loss_funcs = {"dice_loss": dice_loss, "bce_sum": bce_sum}
+
 
 def get_model(model_name, **kwargs):
+    metrics = [
+        dice_coef,
+        "binary_accuracy",
+    ]
     if model_name in model_dict:
         print(f"Model found: {model_name}")
         model_function = model_dict[model_name]
-        # model_function()
+        loss = custom_loss_funcs.get(kwargs["loss_fn"], kwargs["loss_fn"])
+        model = model_function()
+        model.compile(optimizer=kwargs["optimizer"], loss=loss, metrics=metrics)
+        return model
     else:
-        print(f"Model '{model_name}' not found.")
-
-    return model_function(**kwargs)
+        raise NotImplementedError(f"Model '{model_name}' not found.")
 
 
 if __name__ == "__main__":
