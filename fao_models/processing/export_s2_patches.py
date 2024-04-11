@@ -1,7 +1,7 @@
 import ee
 import os
 import google.auth
-from serving import *
+from fao_models.processing.serving import *
 import os
 import argparse
 
