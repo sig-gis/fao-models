@@ -55,7 +55,8 @@ def main():
     model_name = config_data["model_name"]
     total_examples = config_data["total_examples"]
     data_dir = config_data["data_dir"]
-    data_split = config_data["data_split"]
+    test_split = config_data["test_split"]
+    val_split = config_data["val_split"]
     epochs = config_data["epochs"]
     learning_rate = config_data["learning_rate"]
     batch_size = config_data["batch_size"]
@@ -71,7 +72,7 @@ def main():
     # hyperbolically decrease the learning rate to 1/2 of the base rate at 1,000 epochs, 1/3 at 2,000 epochs, and so on.
     if optimizer == "adam":
         if optimizer_use_lr_schedular:
-            steps_per_epoch = total_examples * data_split // batch_size
+            steps_per_epoch = total_examples * test_split // batch_size
             lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(
                 initial_learning_rate=learning_rate,
                 decay_steps=steps_per_epoch * epochs,
@@ -97,8 +98,8 @@ def main():
     dataset = dl.load_dataset_from_tfrecords(data_dir, batch_size=batch_size)
 
     # Split the dataset into training and testing
-    train_dataset, test_dataset = dl.split_dataset(
-        dataset, total_examples, test_split=data_split, batch_size=batch_size
+    train_dataset, test_dataset, val_dataset = dl.split_dataset(
+        dataset, total_examples, test_split=test_split, batch_size=batch_size, val_split=val_split
     )
     train_dataset = train_dataset.shuffle(buffer_size, reshuffle_each_iteration=True)
 
@@ -150,6 +151,9 @@ def main():
     logger.info("Training history:")
     logger.info(pformat(history.history))
 
+    if val_dataset is not None:
+        eval = model.evaluate(val_dataset,return_dict=True)
+        logger.info(f"Validation: {pformat(eval)}")
 
 if __name__ == "__main__":
     main()
