@@ -1,0 +1,18 @@
+experiment_name: dev-predict-runc-mobilenetv3small_batch64.yml
+model_name: mobilenet_v3small
+data_dir: tfrecords\\balanced
+val_data_dir: tfrecords\\validation
+checkpoint: saved_models\\mobilenet_v3small_batch64\\best_model.h5
+total_examples: 77046 # number of geotiffs not tfrecords
+test_split: 0.2
+
+optimizer: adam
+optimizer_use_lr_schedular: true
+loss_function: binary_crossentropy
+
+epochs: 15
+learning_rate: 0.01
+batch_size: 100
+buffer_size: 77046
+
+early_stopping_patience: 5 # null or int
