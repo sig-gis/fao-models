@@ -1,0 +1,16 @@
+
+training_data: projects/pc530-fao-fra-rss/assets/reference/split/training_sample
+image: 
+  type: composite
+  features: ['B1','B2','B3','B4','B5']
+  start_date: 2017-01-01
+  end_date: 2019-12-31
+  cloud_mask: True
+classifier:
+  name: randomforest
+  dest: projects/pc530-fao-fra-rss/assets/models/randomforest-dev
+  init_args:
+    numberOfTrees: 10
+    seed: 42
+  train_args:
+    classProperty: label
