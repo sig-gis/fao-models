@@ -156,7 +156,6 @@ def main():
     logger.info("Training history:")
     logger.info(pformat(history.history))
     
-    print(val_data_dir)
     if val_data_dir:
         val_dataset = dl.load_dataset_from_tfrecords(val_data_dir, batch_size=batch_size)
         eval = model.evaluate(val_dataset,return_dict=True)

@@ -1,8 +1,8 @@
-experiment_name: resnet-epochs10-batch64-lr01
+experiment_name: resnet-epochs10-batch64-lr001
 model_name: resnet
 data_dir: tfrecords/train_test
 val_data_dir: tfrecords/val
-checkpoint: saved_models/resnet-epochs10-batch64-lr01/best_model.h5
+checkpoint: saved_models/resnet-epochs10-batch64-lr001/best_model.h5
 total_examples: 70000 # number of geotiffs not tfrecords
 test_split: 0.2 # float or null
 
