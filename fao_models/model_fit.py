@@ -55,8 +55,8 @@ def main():
     model_name = config_data["model_name"]
     total_examples = config_data["total_examples"]
     data_dir = config_data["data_dir"]
+    val_data_dir = config_data["val_data_dir"]
     test_split = config_data["test_split"]
-    val_split = config_data["val_split"]
     epochs = config_data["epochs"]
     learning_rate = config_data["learning_rate"]
     batch_size = config_data["batch_size"]
@@ -98,8 +98,8 @@ def main():
     dataset = dl.load_dataset_from_tfrecords(data_dir, batch_size=batch_size)
 
     # Split the dataset into training and testing
-    train_dataset, test_dataset, val_dataset = dl.split_dataset(
-        dataset, total_examples, test_split=test_split, batch_size=batch_size, val_split=val_split
+    train_dataset, test_dataset = dl.split_dataset(
+        dataset, total_examples, test_split=test_split, batch_size=batch_size
     )
     train_dataset = train_dataset.shuffle(buffer_size, reshuffle_each_iteration=True)
 
@@ -109,7 +109,12 @@ def main():
     )
     if not os.path.exists(LOGS_DIR):
         os.makedirs(LOGS_DIR)
-
+    SAVED_MODELS_DIR = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "saved_models", experiment_name
+    )
+    if not os.path.exists(SAVED_MODELS_DIR):
+        os.makedirs(SAVED_MODELS_DIR)
+    
     # setup for confusion matrix callback
     tb_samples = train_dataset.take(1)
     x = list(map(lambda x: x[0], tb_samples))[0]
@@ -121,7 +126,7 @@ def main():
     tb_callback = tf.keras.callbacks.TensorBoard(LOGS_DIR)
     cm_callback = CmCallback(y, x, class_names, file_writer)
     save_model_callback = tf.keras.callbacks.ModelCheckpoint(
-        os.path.join(LOGS_DIR, "best_model.h5"),
+        os.path.join(SAVED_MODELS_DIR, "best_model.h5"),
         monitor="val_loss",
         verbose=0,
         save_best_only=True,
@@ -150,8 +155,10 @@ def main():
     logger.info("Model training complete")
     logger.info("Training history:")
     logger.info(pformat(history.history))
-
-    if val_dataset is not None:
+    
+    print(val_data_dir)
+    if val_data_dir:
+        val_dataset = dl.load_dataset_from_tfrecords(val_data_dir, batch_size=batch_size)
         eval = model.evaluate(val_dataset,return_dict=True)
         logger.info(f"Validation: {pformat(eval)}")
 

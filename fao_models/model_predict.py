@@ -45,7 +45,7 @@ def cli():
     args = parser.parse_args()
 
     config_file = args.config
-
+    main(config_file)
 
 def main(config: str | dict):
     # load model
@@ -63,7 +63,8 @@ def main(config: str | dict):
 
     # load image
     # local file as placeholder
-    img = "data/patch_pt9097_nonforest.tif"
+    # img = "data/patch_pt9097_nonforest.tif"
+    img = "data_qa_old_caf\patch_pt0_nonforest.tif"
     with rio.open(img) as dst:
         data = dst.read() / 10_000
         profile = dst.profile
@@ -74,4 +75,5 @@ def main(config: str | dict):
     print(o)
 
 
-main("dev-predict-runc-resnet-jjd.yml")
+# main("dev-predict-runc-resnet-jjd.yml")
+cli()
