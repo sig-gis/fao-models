@@ -1,14 +1,11 @@
 import numpy as np
 import datetime
 import logging
-from models import get_model, CmCallback
-import dataloader as dl
-import keras
+from .models import get_model
 import os
 import tensorflow as tf
 import rasterio as rio
 import yaml
-from pprint import pformat
 import argparse
 
 
@@ -47,19 +44,24 @@ def cli():
     config_file = args.config
 
 
+def load_predict_model(model_name, optimizer, loss_function, weights):
+    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function)
+    model.load_weights(weights)
+    model.trainable = False
+    return model
+
+
 def main(config: str | dict):
     # load model
     if isinstance(config, str):
         with open(config, "r") as file:
             config = yaml.safe_load(file)
     model_name = config["model_name"]
-    checkpoint = config["checkpoint"]
+    weights = config["checkpoint"]
     optimizer = config["optimizer"]
     loss_function = config["loss_function"]
 
-    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function)
-    model.load_weights(checkpoint)
-    model.trainable = False
+    model = load_predict_model(model_name, optimizer, loss_function, weights)
 
     # load image
     # local file as placeholder
@@ -74,4 +76,13 @@ def main(config: str | dict):
     print(o)
 
 
-main("dev-predict-runc-resnet-jjd.yml")
+def eetest():
+    import ee
+
+    all_hex = ee.FeatureCollection(
+        "projects/pc530-fao-fra-rss/assets/reference/hexWCenPropertiesTropics"
+    )
+    print(all_hex.limit(1).getInfo())
+
+
+# main("dev-predict-runc-resnet-jjd.yml")
