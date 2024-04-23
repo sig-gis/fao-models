@@ -55,7 +55,8 @@ def main():
     model_name = config_data["model_name"]
     total_examples = config_data["total_examples"]
     data_dir = config_data["data_dir"]
-    data_split = config_data["data_split"]
+    val_data_dir = config_data["val_data_dir"]
+    test_split = config_data["test_split"]
     epochs = config_data["epochs"]
     learning_rate = config_data["learning_rate"]
     batch_size = config_data["batch_size"]
@@ -71,7 +72,7 @@ def main():
     # hyperbolically decrease the learning rate to 1/2 of the base rate at 1,000 epochs, 1/3 at 2,000 epochs, and so on.
     if optimizer == "adam":
         if optimizer_use_lr_schedular:
-            steps_per_epoch = total_examples * data_split // batch_size
+            steps_per_epoch = total_examples * test_split // batch_size
             lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(
                 initial_learning_rate=learning_rate,
                 decay_steps=steps_per_epoch * epochs,
@@ -98,7 +99,7 @@ def main():
 
     # Split the dataset into training and testing
     train_dataset, test_dataset = dl.split_dataset(
-        dataset, total_examples, test_split=data_split, batch_size=batch_size
+        dataset, total_examples, test_split=test_split, batch_size=batch_size
     )
     train_dataset = train_dataset.shuffle(buffer_size, reshuffle_each_iteration=True)
 
@@ -108,7 +109,12 @@ def main():
     )
     if not os.path.exists(LOGS_DIR):
         os.makedirs(LOGS_DIR)
-
+    SAVED_MODELS_DIR = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "saved_models", experiment_name
+    )
+    if not os.path.exists(SAVED_MODELS_DIR):
+        os.makedirs(SAVED_MODELS_DIR)
+    
     # setup for confusion matrix callback
     tb_samples = train_dataset.take(1)
     x = list(map(lambda x: x[0], tb_samples))[0]
@@ -120,7 +126,7 @@ def main():
     tb_callback = tf.keras.callbacks.TensorBoard(LOGS_DIR)
     cm_callback = CmCallback(y, x, class_names, file_writer)
     save_model_callback = tf.keras.callbacks.ModelCheckpoint(
-        os.path.join(LOGS_DIR, "best_model.h5"),
+        os.path.join(SAVED_MODELS_DIR, "best_model.h5"),
         monitor="val_loss",
         verbose=0,
         save_best_only=True,
@@ -149,7 +155,11 @@ def main():
     logger.info("Model training complete")
     logger.info("Training history:")
     logger.info(pformat(history.history))
-
+    
+    if val_data_dir:
+        val_dataset = dl.load_dataset_from_tfrecords(val_data_dir, batch_size=batch_size)
+        eval = model.evaluate(val_dataset,return_dict=True)
+        logger.info(f"Validation: {pformat(eval)}")
 
 if __name__ == "__main__":
     main()

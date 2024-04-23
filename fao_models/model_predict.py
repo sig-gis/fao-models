@@ -42,6 +42,7 @@ def cli():
     args = parser.parse_args()
 
     config_file = args.config
+    main(config_file)
 
 
 def load_predict_model(model_name, optimizer, loss_function, weights):
@@ -65,7 +66,8 @@ def main(config: str | dict):
 
     # load image
     # local file as placeholder
-    img = "data/patch_pt9097_nonforest.tif"
+    # img = "data/patch_pt9097_nonforest.tif"
+    img = "data_qa_old_caf\patch_pt0_nonforest.tif"
     with rio.open(img) as dst:
         data = dst.read() / 10_000
         profile = dst.profile
@@ -76,13 +78,5 @@ def main(config: str | dict):
     print(o)
 
 
-def eetest():
-    import ee
-
-    all_hex = ee.FeatureCollection(
-        "projects/pc530-fao-fra-rss/assets/reference/hexWCenPropertiesTropics"
-    )
-    print(all_hex.limit(1).getInfo())
-
-
 # main("dev-predict-runc-resnet-jjd.yml")
+cli()
