@@ -23,6 +23,7 @@ class ClassifierInfo:
     dest: str | Path
     init_args: dict
     train_args: dict
+    pre_compute_training: Optional[str | Path] = None
 
 
 @dataclass
@@ -91,6 +92,23 @@ def get_model(name, **kwargs):
     return model
 
 
+def export_samples(_input, dev):
+    cnfg = load_yml(_input)
+    image_cnfg = ImageInfo(**cnfg["image"])
+    samples = ee.FeatureCollection(cnfg["training_data"])
+    if dev:
+        samples = samples.limit(100)
+    img = get_image(image_cnfg)
+
+    # sample imagery
+    samples_with_feats = sample_image(img, samples, tileScale=12)
+    # save model
+    output = f"{cnfg['training_data']}_s2"
+    task = ee.batch.Export.table.toAsset(samples_with_feats, "export-samples", output)
+    task.start()
+    print("export started:", output)
+
+
 def train(_input, dev: bool = False):
     # unpack yaml
     cnfg = load_yml(_input)
@@ -99,10 +117,17 @@ def train(_input, dev: bool = False):
     samples = ee.FeatureCollection(cnfg["training_data"])
     if dev:
         samples = samples.limit(100)
-    img = get_image(image_cnfg)
 
     # sample imagery
-    samples_with_feats = sample_image(img, samples)
+    if classifier_cnfg.pre_compute_training is not None:
+        samples_with_feats = ee.FeatureCollection(classifier_cnfg.pre_compute_training)
+        samples_with_feats = samples_with_feats.filter(
+            ee.Filter.notNull(image_cnfg.features)
+        )
+    else:
+        img = get_image(image_cnfg)
+        samples_with_feats = sample_image(img, samples)
+
     # build classifer
     model = get_model(
         name=classifier_cnfg.name,
@@ -111,7 +136,7 @@ def train(_input, dev: bool = False):
     # train model
     model = model.train(
         features=samples_with_feats,
-        inputProperties=image_cnfg.features,
+        inputProperties=["B5", "B4", "Nstr"],  # image_cnfg.features + ["Nstr", "GEZ"],
         **classifier_cnfg.train_args,
     )
     # save model
@@ -126,15 +151,20 @@ def evaluate(_input, dev: bool = False):
     image_cnfg = ImageInfo(**cnfg["image"])
     classifier_cnfg = ClassifierInfo(**cnfg["classifier"])
     load = ee.Classifier.load(classifier_cnfg.dest)
-    samples = ee.FeatureCollection(cnfg["testing_data"])
+    print("loaded:", classifier_cnfg.dest)
+    samples = ee.FeatureCollection(cnfg["training_data"])
     if dev:
-        samples = samples.limit(100)
+        total_size = 100
+        s1 = samples.filter("label == 0").limit(total_size // 2)
+        s2 = samples.filter("label == 1").limit(total_size // 2)
+        samples = ee.FeatureCollection([s1, s2]).flatten()
     img = get_image(image_cnfg)
-    samples_with_feats = sample_image(img, samples)
+    samples_with_feats = sample_image(img, samples, tileScale=12)
     predictions = samples_with_feats.classify(load)
     error_matrix = predictions.errorMatrix(
         actual=classifier_cnfg.train_args["classProperty"], predicted="classification"
     )
+    print(error_matrix.getInfo())
     print("Overall accuracy:", error_matrix.accuracy().getInfo())
     print("Consumer's accuracy:")
     print(error_matrix.consumersAccuracy().getInfo())
@@ -145,5 +175,6 @@ def evaluate(_input, dev: bool = False):
 if __name__ == "__main__":
     ee.Initialize(project="pc530-fao-fra-rss")
     dev = False
+    # export_samples("fao_models/baseline/config.yml", dev=dev)
     train("fao_models/baseline/config.yml", dev=dev)
     # evaluate("fao_models/baseline/config.yml", dev=dev)

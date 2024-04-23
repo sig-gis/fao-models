@@ -9,9 +9,13 @@ image:
   cloud_mask: True
 classifier:
   name: randomforest
-  dest: projects/pc530-fao-fra-rss/assets/models/randomforest-v0
+  dest: projects/pc530-fao-fra-rss/assets/models/randomforest-v3
+  pre_compute_training: projects/pc530-fao-fra-rss/assets/reference/split/training_sample_s2
   init_args:
-    numberOfTrees: 15
+    numberOfTrees: 100
     seed: 42
+    maxNodes: 2
+    minLeafPopulation: 1000
+    bagFraction: 0.67
   train_args:
     classProperty: label
