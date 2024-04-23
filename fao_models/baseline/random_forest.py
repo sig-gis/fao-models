@@ -69,6 +69,20 @@ def sample_image(image: ee.Image, samples: ee.FeatureCollection, **kwargs):
     return _samples
 
 
+def get_image(config: ImageInfo):
+    # prep imagery
+    if config.type == "composite":
+        img = make_composite(
+            start_date=config.start_date,
+            end_date=config.end_date,
+            features=config.features,
+        )
+    else:
+        # TODO support image from path
+        raise NotImplementedError
+    return img
+
+
 def get_model(name, **kwargs):
     _models = {"randomforest": ee.Classifier.smileRandomForest}
     model = _models.get(name, None)
@@ -77,7 +91,7 @@ def get_model(name, **kwargs):
     return model
 
 
-def main(_input, dev: bool = False):
+def train(_input, dev: bool = False):
     # unpack yaml
     cnfg = load_yml(_input)
     image_cnfg = ImageInfo(**cnfg["image"])
@@ -85,16 +99,7 @@ def main(_input, dev: bool = False):
     samples = ee.FeatureCollection(cnfg["training_data"])
     if dev:
         samples = samples.limit(100)
-    # prep imagery
-    if image_cnfg.type == "composite":
-        img = make_composite(
-            start_date=image_cnfg.start_date,
-            end_date=image_cnfg.end_date,
-            features=image_cnfg.features,
-        )
-    else:
-        # TODO support image from path
-        raise NotImplementedError
+    img = get_image(image_cnfg)
 
     # sample imagery
     samples_with_feats = sample_image(img, samples)
@@ -116,6 +121,29 @@ def main(_input, dev: bool = False):
     task.start()
 
 
+def evaluate(_input, dev: bool = False):
+    cnfg = load_yml(_input)
+    image_cnfg = ImageInfo(**cnfg["image"])
+    classifier_cnfg = ClassifierInfo(**cnfg["classifier"])
+    load = ee.Classifier.load(classifier_cnfg.dest)
+    samples = ee.FeatureCollection(cnfg["testing_data"])
+    if dev:
+        samples = samples.limit(100)
+    img = get_image(image_cnfg)
+    samples_with_feats = sample_image(img, samples)
+    predictions = samples_with_feats.classify(load)
+    error_matrix = predictions.errorMatrix(
+        actual=classifier_cnfg.train_args["classProperty"], predicted="classification"
+    )
+    print("Overall accuracy:", error_matrix.accuracy().getInfo())
+    print("Consumer's accuracy:")
+    print(error_matrix.consumersAccuracy().getInfo())
+    print("Producer's accuracy:")
+    print(error_matrix.producersAccuracy().getInfo())
+
+
 if __name__ == "__main__":
     ee.Initialize(project="pc530-fao-fra-rss")
-    main("fao_models/baseline/config.yml", dev=True)
+    dev = False
+    train("fao_models/baseline/config.yml", dev=dev)
+    # evaluate("fao_models/baseline/config.yml", dev=dev)
