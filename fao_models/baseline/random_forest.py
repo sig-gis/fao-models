@@ -1,10 +1,11 @@
 from pathlib import Path
 from typing import Optional
 import ee
-import ee.batch
 import yaml
 from dataclasses import dataclass
 from datetime import datetime
+
+from indices import add_features, bnin
 
 
 def load_yml(_input: Path | str):
@@ -20,10 +21,7 @@ def load_yml(_input: Path | str):
 @dataclass
 class ClassifierInfo:
     name: str
-    dest: str | Path
     init_args: dict
-    train_args: dict
-    pre_compute_training: Optional[str | Path] = None
 
 
 @dataclass
@@ -33,6 +31,18 @@ class ImageInfo:
     start_date: Optional[str | datetime] = None
     end_date: Optional[str | datetime] = None
     cloud_mask: Optional[bool] = False
+
+
+@dataclass
+class TrainInfo:
+    src: str | Path
+    pre_computed_samples: bool
+    model_dest: str | Path
+
+
+@dataclass
+class EvaluationInfo:
+    src_model: str | Path
 
 
 def default_s2_composite(start_date: datetime, end_date: datetime, features: list[str]):
@@ -53,9 +63,10 @@ def default_s2_composite(start_date: datetime, end_date: datetime, features: lis
         s2.filterDate(start_date, end_date)
         .linkCollection(csPlus, [QA_BAND])
         .map(lambda img: img.updateMask(img.select(QA_BAND).gte(CLEAR_THRESHOLD)))
-        .select(features)
+        .select(bnin)
         .median()
     )
+    image = image.multiply(0.0001)
     return image
 
 
@@ -64,9 +75,10 @@ def make_composite(**kwargs):
 
 
 def sample_image(image: ee.Image, samples: ee.FeatureCollection, **kwargs):
-    _samples = image.reduceRegions(
-        collection=samples, reducer=ee.Reducer.first(), scale=20, **kwargs
-    )
+    # _samples = image.reduceRegions(
+    #     collection=samples, reducer=ee.Reducer.first(), scale=200, **kwargs
+    # )
+    _samples = image.sampleRegions(collection=samples, scale=20, **kwargs)
     return _samples
 
 
@@ -95,15 +107,17 @@ def get_model(name, **kwargs):
 def export_samples(_input, dev):
     cnfg = load_yml(_input)
     image_cnfg = ImageInfo(**cnfg["image"])
-    samples = ee.FeatureCollection(cnfg["training_data"])
+    samples = ee.FeatureCollection(cnfg["training_data"]).merge(
+        ee.FeatureCollection(cnfg["training_data"])
+    )
+    output = cnfg["sampling"]["output"]
     if dev:
         samples = samples.limit(100)
     img = get_image(image_cnfg)
 
     # sample imagery
-    samples_with_feats = sample_image(img, samples, tileScale=12)
-    # save model
-    output = f"{cnfg['training_data']}_s2"
+    samples_with_feats = sample_image(img, samples, tileScale=16)
+
     task = ee.batch.Export.table.toAsset(samples_with_feats, "export-samples", output)
     task.start()
     print("export started:", output)
@@ -112,18 +126,17 @@ def export_samples(_input, dev):
 def train(_input, dev: bool = False):
     # unpack yaml
     cnfg = load_yml(_input)
-    image_cnfg = ImageInfo(**cnfg["image"])
     classifier_cnfg = ClassifierInfo(**cnfg["classifier"])
-    samples = ee.FeatureCollection(cnfg["training_data"])
+    training_cnfg = TrainInfo(**cnfg["training"])
+    image_cnfg = ImageInfo(**cnfg["image"])
+
+    samples = ee.FeatureCollection(training_cnfg.src)
     if dev:
         samples = samples.limit(100)
 
     # sample imagery
-    if classifier_cnfg.pre_compute_training is not None:
-        samples_with_feats = ee.FeatureCollection(classifier_cnfg.pre_compute_training)
-        samples_with_feats = samples_with_feats.filter(
-            ee.Filter.notNull(image_cnfg.features)
-        )
+    if training_cnfg.pre_computed_samples:
+        samples_with_feats = samples.filter(ee.Filter.notNull(image_cnfg.features))
     else:
         img = get_image(image_cnfg)
         samples_with_feats = sample_image(img, samples)
@@ -136,33 +149,37 @@ def train(_input, dev: bool = False):
     # train model
     model = model.train(
         features=samples_with_feats,
-        inputProperties=["B5", "B4", "Nstr"],  # image_cnfg.features + ["Nstr", "GEZ"],
-        **classifier_cnfg.train_args,
+        inputProperties=image_cnfg.features + ["Nstr", "GEZ"],
+        classProperty=cnfg["target_property"],
     )
     # save model
     task = ee.batch.Export.classifier.toAsset(
-        model, "export-model", classifier_cnfg.dest
+        model, "export-model", training_cnfg.model_dest
     )
     task.start()
+    print("started export:", training_cnfg.model_dest)
 
 
 def evaluate(_input, dev: bool = False):
     cnfg = load_yml(_input)
     image_cnfg = ImageInfo(**cnfg["image"])
-    classifier_cnfg = ClassifierInfo(**cnfg["classifier"])
-    load = ee.Classifier.load(classifier_cnfg.dest)
-    print("loaded:", classifier_cnfg.dest)
+    eval_cnfg = EvaluationInfo(**cnfg["evaluation"])
+
+    load = ee.Classifier.load(eval_cnfg.src_model)
+    print("loaded:", eval_cnfg.src_model)
+
     samples = ee.FeatureCollection(cnfg["training_data"])
     if dev:
         total_size = 100
         s1 = samples.filter("label == 0").limit(total_size // 2)
         s2 = samples.filter("label == 1").limit(total_size // 2)
         samples = ee.FeatureCollection([s1, s2]).flatten()
+
     img = get_image(image_cnfg)
     samples_with_feats = sample_image(img, samples, tileScale=12)
     predictions = samples_with_feats.classify(load)
     error_matrix = predictions.errorMatrix(
-        actual=classifier_cnfg.train_args["classProperty"], predicted="classification"
+        actual=cnfg["target_property"], predicted="classification"
     )
     print(error_matrix.getInfo())
     print("Overall accuracy:", error_matrix.accuracy().getInfo())
@@ -174,7 +191,7 @@ def evaluate(_input, dev: bool = False):
 
 if __name__ == "__main__":
     ee.Initialize(project="pc530-fao-fra-rss")
-    dev = False
-    # export_samples("fao_models/baseline/config.yml", dev=dev)
-    train("fao_models/baseline/config.yml", dev=dev)
+    dev = True
+    export_samples("fao_models/baseline/config.yml", dev=dev)
+    # train("fao_models/baseline/config.yml", dev=dev)
     # evaluate("fao_models/baseline/config.yml", dev=dev)
