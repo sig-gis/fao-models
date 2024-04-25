@@ -52,10 +52,14 @@ def default_s2_composite(start_date: datetime, end_date: datetime, features: lis
     start_date = start_date.strftime("%Y-%m-%d")
     end_date = end_date.strftime("%Y-%m-%d")
 
-    s2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+    s2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filter(
+        ee.Filter.neq("system:index", "20190417T065631_20190417T070736_T38NRL")
+    )
     # Cloud Score+ image collection. Note Cloud Score+ is produced from Sentinel-2
     # Level 1C data and can be applied to either L1C or L2A collections.
-    csPlus = ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED")
+    csPlus = ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED").filter(
+        ee.Filter.neq("system:index", "20190417T065631_20190417T070736_T38NRL")
+    )
     # Use 'cs' or 'cs_cdf', depending on your use case; see docs for guidance.
     QA_BAND = "cs_cdf"
     # The threshold for masking; values between 0.50 and 0.65 generally work well.
@@ -81,6 +85,7 @@ def sample_image(image: ee.Image, samples: ee.FeatureCollection, **kwargs):
     #     collection=samples, reducer=ee.Reducer.first(), scale=200, **kwargs
     # )
     _samples = image.sampleRegions(collection=samples, scale=20, **kwargs)
+    _samples = _samples.map(lambda f: f.setGeometry(ee.Geometry.Point([0, 0])))
     return _samples
 
 
@@ -133,7 +138,7 @@ def train(_input, dev: bool = False):
 
     samples = ee.FeatureCollection(training_cnfg.src)
     if dev:
-        samples = samples.limit(100)
+        samples = samples.limit(1000)
 
     # sample imagery
     if training_cnfg.pre_computed_samples:
@@ -144,7 +149,6 @@ def train(_input, dev: bool = False):
         features = image_cnfg.features
         img = get_image(image_cnfg)
         samples_with_feats = sample_image(img, samples)
-
     # build classifer
     model = get_model(
         name=classifier_cnfg.name,
@@ -157,6 +161,14 @@ def train(_input, dev: bool = False):
         classProperty=cnfg["target_property"],
     )
     # save model
+    #  how to save oob and importance? double check it's not in output
+    # explain = model.explain()
+    # model.set(
+    #     {
+    #         "importance": explain.get("importance"),
+    #         "outOfBagErrorEstimate": explain.get("outOfBagErrorEstimate"),
+    #     }
+    # )
     task = ee.batch.Export.classifier.toAsset(
         model, "export-model", training_cnfg.model_dest
     )
@@ -181,6 +193,9 @@ def evaluate(_input, dev: bool = False):
 
     img = get_image(image_cnfg)
     samples_with_feats = sample_image(img, samples, tileScale=12)
+    samples_with_feats = samples_with_feats.filter(
+        ee.Filter.notNull(["B4", "B3", "B2", "B8", "Nstr", "GEZ"])
+    )
     predictions = samples_with_feats.classify(load)
     error_matrix = predictions.errorMatrix(
         actual=cnfg["target_property"], predicted="classification"
@@ -195,10 +210,8 @@ def evaluate(_input, dev: bool = False):
     else:
         output = eval_cnfg.output
         md = ee.Dictionary(eval_cnfg.__dict__).set("features", load.schema())
-        predictions = predictions.set(md).map(
-            lambda f: f.setGeometry(ee.Geometry.Point([0, 0]))
-        )
-        task = ee.batch.Export.table.toAsset(predictions, "export-samples", output)
+        predictions = predictions.set(md)
+        task = ee.batch.Export.table.toAsset(predictions, "export-predictions", output)
         task.start()
         print("export started:", output)
 
@@ -206,7 +219,7 @@ def evaluate(_input, dev: bool = False):
 if __name__ == "__main__":
     ee.Initialize(project="pc530-fao-fra-rss")
     dev = False
-    config = "fao_models/baseline/config_baseline.yml"
-    export_samples(config, dev=dev)
+    config = "fao_models/baseline/config_baseline_v0.yml"
+    # export_samples(config, dev=dev)
     # train(config, dev=dev)
-    # evaluate(config, dev=dev)
+    evaluate(config, dev=dev)
