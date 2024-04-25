@@ -22,7 +22,7 @@ classifier:
 
 # sample/train/eval parameters
 sampling:
-  output: projects/pc530-fao-fra-rss/assets/reference/split/merged_train_test_sample_dev_2
+  output: projects/pc530-fao-fra-rss/assets/reference/split/test_sample_10k
 
 training:
   src: projects/pc530-fao-fra-rss/assets/reference/split/training_sample_dev_indices
