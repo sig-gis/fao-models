@@ -14,9 +14,9 @@ image:
 classifier:
   name: randomforest
   init_args:
-    numberOfTrees: 100
+    numberOfTrees: 50
     seed: 42
-    # maxNodes: 
+    maxNodes: 5
     # minLeafPopulation: 1000
     bagFraction: 0.67
 
@@ -25,12 +25,12 @@ sampling:
   output: projects/pc530-fao-fra-rss/assets/reference/split/training_sample_baseline
 
 training:
-  src: projects/pc530-fao-fra-rss/assets/reference/split/training_sample_baseline
+  src: projects/pc530-fao-fra-rss/assets/reference/split/training_sample_baseline_balanced
   pre_computed_samples: True
   features: ["B4", "B3", "B2", "B8", "Nstr", "GEZ"]
-  model_dest: projects/pc530-fao-fra-rss/assets/models/randomforest-baseline
+  model_dest: projects/pc530-fao-fra-rss/assets/models/randomforest-baseline-v0-bal-maxnode-5
 
 
 evaluation:
-  src_model: projects/pc530-fao-fra-rss/assets/models/randomforest-baseline
-  output: projects/pc530-fao-fra-rss/assets/predictions/randomforest-baseline
+  src_model: projects/pc530-fao-fra-rss/assets/models/randomforest-baseline-v0-bal-maxnode-5
+  output: projects/pc530-fao-fra-rss/assets/predictions/randomforest-baseline-v0-bal-maxnode-5
