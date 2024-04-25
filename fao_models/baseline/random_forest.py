@@ -38,11 +38,13 @@ class TrainInfo:
     src: str | Path
     pre_computed_samples: bool
     model_dest: str | Path
+    features: Optional[list[str]] = None
 
 
 @dataclass
 class EvaluationInfo:
     src_model: str | Path
+    output: str | Path
 
 
 def default_s2_composite(start_date: datetime, end_date: datetime, features: list[str]):
@@ -63,7 +65,7 @@ def default_s2_composite(start_date: datetime, end_date: datetime, features: lis
         s2.filterDate(start_date, end_date)
         .linkCollection(csPlus, [QA_BAND])
         .map(lambda img: img.updateMask(img.select(QA_BAND).gte(CLEAR_THRESHOLD)))
-        .select(bnin)
+        .select(features)
         .median()
     )
     image = image.multiply(0.0001)
@@ -112,7 +114,7 @@ def export_samples(_input, dev):
     )
     output = cnfg["sampling"]["output"]
     if dev:
-        samples = samples.limit(100)
+        samples = samples.limit(10_000)
     img = get_image(image_cnfg)
 
     # sample imagery
@@ -128,7 +130,6 @@ def train(_input, dev: bool = False):
     cnfg = load_yml(_input)
     classifier_cnfg = ClassifierInfo(**cnfg["classifier"])
     training_cnfg = TrainInfo(**cnfg["training"])
-    image_cnfg = ImageInfo(**cnfg["image"])
 
     samples = ee.FeatureCollection(training_cnfg.src)
     if dev:
@@ -136,8 +137,11 @@ def train(_input, dev: bool = False):
 
     # sample imagery
     if training_cnfg.pre_computed_samples:
-        samples_with_feats = samples.filter(ee.Filter.notNull(image_cnfg.features))
+        features = training_cnfg.features
+        samples_with_feats = samples.filter(ee.Filter.notNull(features))
     else:
+        image_cnfg = ImageInfo(**cnfg["image"])
+        features = image_cnfg.features
         img = get_image(image_cnfg)
         samples_with_feats = sample_image(img, samples)
 
@@ -149,7 +153,7 @@ def train(_input, dev: bool = False):
     # train model
     model = model.train(
         features=samples_with_feats,
-        inputProperties=image_cnfg.features + ["Nstr", "GEZ"],
+        inputProperties=features,
         classProperty=cnfg["target_property"],
     )
     # save model
@@ -168,7 +172,7 @@ def evaluate(_input, dev: bool = False):
     load = ee.Classifier.load(eval_cnfg.src_model)
     print("loaded:", eval_cnfg.src_model)
 
-    samples = ee.FeatureCollection(cnfg["training_data"])
+    samples = ee.FeatureCollection(cnfg["validation_data"])
     if dev:
         total_size = 100
         s1 = samples.filter("label == 0").limit(total_size // 2)
@@ -181,17 +185,28 @@ def evaluate(_input, dev: bool = False):
     error_matrix = predictions.errorMatrix(
         actual=cnfg["target_property"], predicted="classification"
     )
-    print(error_matrix.getInfo())
-    print("Overall accuracy:", error_matrix.accuracy().getInfo())
-    print("Consumer's accuracy:")
-    print(error_matrix.consumersAccuracy().getInfo())
-    print("Producer's accuracy:")
-    print(error_matrix.producersAccuracy().getInfo())
+    if dev:
+        print(error_matrix.getInfo())
+        print("Overall accuracy:", error_matrix.accuracy().getInfo())
+        print("Consumer's accuracy:")
+        print(error_matrix.consumersAccuracy().getInfo())
+        print("Producer's accuracy:")
+        print(error_matrix.producersAccuracy().getInfo())
+    else:
+        output = eval_cnfg.output
+        md = ee.Dictionary(eval_cnfg.__dict__).set("features", load.schema())
+        predictions = predictions.set(md).map(
+            lambda f: f.setGeometry(ee.Geometry.Point([0, 0]))
+        )
+        task = ee.batch.Export.table.toAsset(predictions, "export-samples", output)
+        task.start()
+        print("export started:", output)
 
 
 if __name__ == "__main__":
     ee.Initialize(project="pc530-fao-fra-rss")
-    dev = True
-    export_samples("fao_models/baseline/config.yml", dev=dev)
-    # train("fao_models/baseline/config.yml", dev=dev)
-    # evaluate("fao_models/baseline/config.yml", dev=dev)
+    dev = False
+    config = "fao_models/baseline/config_baseline.yml"
+    export_samples(config, dev=dev)
+    # train(config, dev=dev)
+    # evaluate(config, dev=dev)
