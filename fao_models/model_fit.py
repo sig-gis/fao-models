@@ -65,6 +65,7 @@ def main():
     optimizer_use_lr_schedular = config_data["optimizer_use_lr_schedular"]
     loss_function = config_data["loss_function"]
     early_stopping_patience = config_data["early_stopping_patience"]
+    checkpoint = config_data["checkpoint"]
     if args.test:
         total_examples = batch_size * 5
         experiment_name = f"TEST{experiment_name}"
@@ -126,7 +127,7 @@ def main():
     tb_callback = tf.keras.callbacks.TensorBoard(LOGS_DIR)
     cm_callback = CmCallback(y, x, class_names, file_writer)
     save_model_callback = tf.keras.callbacks.ModelCheckpoint(
-        os.path.join(SAVED_MODELS_DIR, "best_model.h5"),
+        filepath=checkpoint,
         monitor="val_loss",
         verbose=0,
         save_best_only=True,
@@ -157,6 +158,8 @@ def main():
     logger.info(pformat(history.history))
     
     if val_data_dir:
+        logger.info(f"loading model weights from checkpoint: {checkpoint}")
+        model.load_weights(checkpoint)
         val_dataset = dl.load_dataset_from_tfrecords(val_data_dir, batch_size=batch_size)
         eval = model.evaluate(val_dataset,return_dict=True)
         logger.info(f"Validation: {pformat(eval)}")
