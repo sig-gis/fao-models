@@ -1,0 +1,33 @@
+
+training_data: projects/pc530-fao-fra-rss/assets/reference/split/training_sample
+testing_data: projects/pc530-fao-fra-rss/assets/reference/split/testing_sample
+validation_data: projects/pc530-fao-fra-rss/assets/reference/split/validation_sample
+target_property: label
+
+image: 
+  type: composite
+  features: ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B11', 'B12', 'nd_blue_green', 'nd_blue_red', 'nd_blue_nir', 'nd_blue_swir1', 'nd_blue_swir2', 'nd_green_red', 'nd_green_nir', 'nd_green_swir1', 'nd_green_swir2', 'nd_red_swir1', 'nd_red_swir2', 'nd_nir_red', 'nd_nir_swir1', 'nd_nir_swir2', 'nd_swir1_swir2', 'r_blue_green', 'r_blue_red', 'r_blue_nir', 'r_blue_swir1', 'r_blue_swir2', 'r_green_red', 'r_green_nir', 'r_green_swir1', 'r_green_swir2', 'r_red_swir1', 'r_red_swir2', 'r_nir_red', 'r_nir_swir1', 'r_nir_swir2', 'r_swir1_swir2']
+  start_date: 2017-01-01
+  end_date: 2019-12-31
+  cloud_mask: True
+
+classifier:
+  name: randomforest
+  init_args:
+    numberOfTrees: 100
+    seed: 42
+    # maxNodes: 
+    # minLeafPopulation: 1000
+    bagFraction: 0.67
+
+# sample/train/eval parameters
+sampling:
+  output: projects/pc530-fao-fra-rss/assets/reference/split/test_sample_10k
+
+training:
+  src: projects/pc530-fao-fra-rss/assets/reference/split/training_sample_dev_indices
+  pre_computed_samples: True
+  model_dest: projects/pc530-fao-fra-rss/assets/models/randomforest-dev-indices
+
+evaluation:
+  src_model: projects/pc530-fao-fra-rss/assets/models/randomforest-dev-indices

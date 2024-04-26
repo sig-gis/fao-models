@@ -16,7 +16,7 @@ def select_columns(df: pd.DataFrame, columns: list[str]):
 
 
 def save(df: pd.DataFrame, location):
-    df.to_csv(location)
+    df.to_csv(location, index=False, header=False)
 
 
 def main():
@@ -28,4 +28,5 @@ def main():
         save(df, f"match_{f}")
 
 
-main()
+if __name__ == "__main__":
+    main()

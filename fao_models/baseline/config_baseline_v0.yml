@@ -1,0 +1,36 @@
+
+training_data: projects/pc530-fao-fra-rss/assets/reference/split/training_sample
+testing_data: projects/pc530-fao-fra-rss/assets/reference/split/testing_sample
+validation_data: projects/pc530-fao-fra-rss/assets/reference/split/validation_sample
+target_property: label
+
+image: 
+  type: composite
+  features: ["B4", "B3", "B2", "B8"]
+  start_date: 2017-01-01
+  end_date: 2019-12-31
+  cloud_mask: True
+
+classifier:
+  name: randomforest
+  init_args:
+    numberOfTrees: 50
+    seed: 42
+    maxNodes: 5
+    # minLeafPopulation: 1000
+    bagFraction: 0.67
+
+# sample/train/eval parameters
+sampling:
+  output: projects/pc530-fao-fra-rss/assets/reference/split/training_sample_baseline
+
+training:
+  src: projects/pc530-fao-fra-rss/assets/reference/split/training_sample_baseline_balanced
+  pre_computed_samples: True
+  features: ["B4", "B3", "B2", "B8", "Nstr", "GEZ"]
+  model_dest: projects/pc530-fao-fra-rss/assets/models/randomforest-baseline-v0-bal-maxnode-5
+
+
+evaluation:
+  src_model: projects/pc530-fao-fra-rss/assets/models/randomforest-baseline-v0-bal-maxnode-5
+  output: projects/pc530-fao-fra-rss/assets/predictions/randomforest-baseline-v0-bal-maxnode-5
