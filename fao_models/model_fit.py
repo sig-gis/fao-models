@@ -5,6 +5,7 @@ from models import get_model, CmCallback
 import dataloader as dl
 import os
 import tensorflow as tf
+import numpy as np
 
 import yaml
 from pprint import pformat
@@ -55,8 +56,10 @@ def main():
     model_name = config_data["model_name"]
     total_examples = config_data["total_examples"]
     data_dir = config_data["data_dir"]
-    val_data_dir = config_data["val_data_dir"]
+    # val_data_dir = config_data["val_data_dir"]
     test_split = config_data["test_split"]
+    val_split = config_data["val_split"]
+    seed = config_data["seed"]
     epochs = config_data["epochs"]
     learning_rate = config_data["learning_rate"]
     batch_size = config_data["batch_size"]
@@ -85,7 +88,8 @@ def main():
             )
             optimizer = tf.keras.optimizers.Adam(lr_schedule)
         else:
-            optimizer = tf.keras.optimizers.Adam()
+            logger.info(f"Using a constant learning rate of {learning_rate}")
+            optimizer = tf.keras.optimizers.Adam(learning_rate)
 
     # pull model from config
     model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function)
@@ -96,14 +100,26 @@ def main():
     logger.info(pformat(config_data))
 
     # Load the dataset without batching
-    dataset = dl.load_dataset_from_tfrecords(data_dir, batch_size=batch_size)
+    dataset = dl.load_dataset_from_tfrecords(data_dir, batch_size=batch_size, buffer_size=buffer_size, seed=seed)
 
-    # Split the dataset into training and testing
-    train_dataset, test_dataset = dl.split_dataset(
+    # Split the dataset 2 ways or 3 ways
+    if val_split is not None:
+        train_dataset, test_dataset, val_dataset = dl.split_dataset(
+            dataset,
+            total_examples,
+            test_split=test_split,
+            batch_size=batch_size,
+            val_split=val_split,
+        )
+        
+    else:
+        train_dataset, test_dataset = dl.split_dataset(
         dataset, total_examples, test_split=test_split, batch_size=batch_size
-    )
-    train_dataset = train_dataset.shuffle(buffer_size, reshuffle_each_iteration=True)
-
+        )
+        
+    train_dataset = train_dataset.shuffle(
+        buffer_size, reshuffle_each_iteration=True)
+    
     logger.info("Starting model training...")
     LOGS_DIR = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "logs", experiment_name
@@ -157,10 +173,9 @@ def main():
     logger.info("Training history:")
     logger.info(pformat(history.history))
     
-    if val_data_dir:
+    if val_split is not None:
         logger.info(f"loading model weights from checkpoint: {checkpoint}")
         model.load_weights(checkpoint)
-        val_dataset = dl.load_dataset_from_tfrecords(val_data_dir, batch_size=batch_size)
         eval = model.evaluate(val_dataset,return_dict=True)
         logger.info(f"Validation: {pformat(eval)}")
 

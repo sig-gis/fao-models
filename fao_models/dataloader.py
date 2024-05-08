@@ -17,10 +17,10 @@ def _parse_function(proto):
     return image, label
 
 
-def load_dataset_from_tfrecords(tfrecord_dir, batch_size=32):
+def load_dataset_from_tfrecords(tfrecord_dir, batch_size=32, buffer_size=100, seed=42):
 
     pattern = tfrecord_dir + "/*.tfrecord.gz"
-    files = tf.data.Dataset.list_files(pattern)
+    files = tf.data.Dataset.list_files(pattern, shuffle=False)
     dataset = files.interleave(
         lambda x: tf.data.TFRecordDataset(x, compression_type="GZIP"),
         cycle_length=tf.data.AUTOTUNE,
@@ -29,7 +29,7 @@ def load_dataset_from_tfrecords(tfrecord_dir, batch_size=32):
     dataset = dataset.map(_parse_function, num_parallel_calls=tf.data.AUTOTUNE).batch(
         batch_size, drop_remainder=True
     )
-    dataset = dataset.shuffle(buffer_size=100_000, seed=42)
+    dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed)
     return dataset
 
 def split_dataset(dataset, total_examples, test_split=0.2, batch_size=32, val_split=None):
