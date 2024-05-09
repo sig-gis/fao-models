@@ -56,12 +56,12 @@ def main():
     model_name = config_data["model_name"]
     total_examples = config_data["total_examples"]
     data_dir = config_data["data_dir"]
-    # val_data_dir = config_data["val_data_dir"]
     test_split = config_data["test_split"]
     val_split = config_data["val_split"]
     seed = config_data["seed"]
     epochs = config_data["epochs"]
     learning_rate = config_data["learning_rate"]
+    decay_rate = config_data["decay_rate"]
     batch_size = config_data["batch_size"]
     buffer_size = config_data["buffer_size"]
     optimizer = config_data["optimizer"]
@@ -80,7 +80,7 @@ def main():
             lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(
                 initial_learning_rate=learning_rate,
                 decay_steps=steps_per_epoch * epochs,
-                decay_rate=1,
+                decay_rate=decay_rate,
                 staircase=False,
             )
             logger.info(

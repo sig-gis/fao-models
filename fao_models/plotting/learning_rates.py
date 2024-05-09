@@ -59,39 +59,76 @@ total_examples = 77000
 test_split = 0.2
 batch_size = 64
 steps_per_epoch = total_examples * test_split // batch_size
+print('Steps per epoch:', steps_per_epoch)
 
 #%%
 # Inverse Time Decay
 # for ITD decay rate needs to be more aggressive the more epochs we have
-lr_decay = 1
+# orginal decay rate constant - decay steps proportional to epochs
 lr = 0.001
-for epochs in [5,50,100]:
-    decay_steps = int(steps_per_epoch * epochs)
-    # lr_decay = base_decay_rate * (1/5*epochs)
+lr_decay = 1.5
+for epochs in [5,10,15,30,50,100]:
+    decay_steps = (steps_per_epoch * epochs)
+    lr_decay ** 1/5 if lr_decay > 1 else lr_decay
     lr_vals = []
-    for i in range(1,decay_steps):
+    for i in range(1,int(decay_steps)):
         lr_val = InverseTimeDecayScheduler(lr, lr_decay, decay_steps, step = i).lr_step
         lr_vals.append(lr_val)
-    print(lr_vals[:10])
-    plt.plot(lr_vals, label=f'{epochs} epochs')
+    plt.plot(lr_vals, label=f'{epochs} epochs - decay_steps={decay_steps} - lr_decay={lr_decay}')
     plt.xlabel('Step')
     plt.ylabel('Learning Rate')
     plt.legend()
-    plt.title(f'Inverse Time Decay - lr={lr}, decay_rate={lr_decay}')
-# %%
-# Exponential Decay
-lr_decay = 0.9
+    plt.title(f'Inverse Time Decay - lr={lr} - original')
+#%%
+# Inverse Time Decay
+# for ITD decay rate needs to be more aggressive the more epochs we have
+# ((steps_per_epoch * epochs) ** 1/5) - modify lr_Decay as well
 lr = 0.001
-for epochs in [5,50,100]:
-    decay_steps = int(steps_per_epoch * epochs)
+lr_decay = 1.5
+for epochs in [5,10,15,30,50,100]:
+    decay_steps = ((steps_per_epoch * epochs) ** 1/5)
+    lr_decay = lr_decay ** 1/5 if lr_decay > 1 else lr_decay
     lr_vals = []
-    for i in range(1,decay_steps):
-        lr_val = ExponentialDecayScheduler(lr, lr_decay, decay_steps, step = i).lr_step
+    for i in range(1,int(decay_steps)):
+        lr_val = InverseTimeDecayScheduler(lr, lr_decay, decay_steps, step = i).lr_step
         lr_vals.append(lr_val)
-    print(lr_vals[:10])
-    plt.plot(lr_vals, label=f'{epochs} epochs')
+    plt.plot(lr_vals, label=f'{epochs} epochs - decay_steps={decay_steps} - lr_decay={lr_decay}')
     plt.xlabel('Step')
     plt.ylabel('Learning Rate')
     plt.legend()
-    plt.title(f'Exponential Decay - lr={lr}, decay_rate={lr_decay}')
+    plt.title(f'Inverse Time Decay - lr={lr} - decay steps ** 1/5')
+#%%
+# Inverse Time Decay
+# for ITD decay rate needs to be more aggressive the more epochs we have
+# ((steps_per_epoch * epochs) ** 1/5) * 2
+lr = 0.001
+lr_decay = 1.5
+for epochs in [5,10,15,30,50,100]:
+    decay_steps = ((steps_per_epoch * epochs) ** 1/5)*2
+    lr_decay = lr_decay ** 1/5 if lr_decay > 1 else lr_decay
+    lr_vals = []
+    for i in range(1,int(decay_steps)):
+        lr_val = InverseTimeDecayScheduler(lr, lr_decay, decay_steps, step = i).lr_step
+        lr_vals.append(lr_val)
+    plt.plot(lr_vals, label=f'{epochs} epochs - decay_steps={decay_steps} - lr_decay={lr_decay}')
+    plt.xlabel('Step')
+    plt.ylabel('Learning Rate')
+    plt.legend()
+    plt.title(f'Inverse Time Decay - lr={lr} - (decay steps ** 1/5)*2')
 # %%
+# # Exponential Decay
+# lr_decay = 0.9
+# lr = 0.001
+# for epochs in [5,50,100]:
+#     decay_steps = int(steps_per_epoch * epochs)
+#     lr_vals = []
+#     for i in range(1,int(decay_steps)):
+#         lr_val = ExponentialDecayScheduler(lr, lr_decay, decay_steps, step = i).lr_step
+#         lr_vals.append(lr_val)
+#     print(lr_vals[:10])
+#     plt.plot(lr_vals, label=f'{epochs} epochs')
+#     plt.xlabel('Step')
+#     plt.ylabel('Learning Rate')
+#     plt.legend()
+#     plt.title(f'Exponential Decay - lr={lr}, decay_rate={lr_decay}')
+# # %%
