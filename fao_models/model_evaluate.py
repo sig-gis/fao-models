@@ -1,7 +1,7 @@
 import os
 import tensorflow as tf
 import dataloader as dl
-from models import get_model
+from models import get_model, freeze
 import yaml
 import argparse
 import numpy as np
@@ -39,18 +39,18 @@ def main():
     test_split = config["test_split"]
     total_examples = config["total_examples"]
     buffer_size = config["buffer_size"]
-
+    seed = config["seed"]
+    
+    print(pformat(config))
+    
     # load model from checkpoint
     model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function)
     model.load_weights(checkpoint)
-    # when mode.trainable was set to False, was getting error at model.load_weights(checkpoint): ValueError: axes don't match array
-    # https://stackoverflow.com/questions/51944836/keras-load-model-valueerror-axes-dont-match-array
-    model.trainable = True 
-
-    # print(model.summary())
+    freeze(model) # freeze weights for inference
+    print(model.summary())
 
     # load data 
-    dataset = dl.load_dataset_from_tfrecords(data_dir, batch_size=batch_size, buffer_size=buffer_size)
+    dataset = dl.load_dataset_from_tfrecords(data_dir, batch_size=batch_size, buffer_size=buffer_size, seed=seed)
     
     train_dataset, test_dataset, val_dataset = dl.split_dataset(
             dataset,
@@ -59,9 +59,7 @@ def main():
             batch_size=batch_size,
             val_split=val_split,
     )
-        
 
-    model.load_weights(checkpoint)
     eval = model.evaluate(val_dataset,return_dict=True)
     print(f"Validation: {pformat(eval)}")
 

@@ -1,7 +1,7 @@
 # %%
 import datetime
 import logging
-from models import get_model, CmCallback
+from models import get_model, freeze, CmCallback
 import dataloader as dl
 import os
 import tensorflow as tf
@@ -117,6 +117,33 @@ def main():
         dataset, total_examples, test_split=test_split, batch_size=batch_size
         )
         
+    # checking data splits for class balance
+    logger.info('Reporting class balance for each data split...')
+
+    logger.info('All Data')
+    y_true = np.concatenate([y for x, y in dataset], axis=0)
+    logger.info('y_true count: %s',len(y_true))
+    vals, counts = np.unique(y_true, return_counts=True)
+    logger.info('vals, counts: %s',[vals, counts])
+    
+    logger.info('Train Data')
+    y_true_train = np.concatenate([y for x, y in train_dataset], axis=0)
+    logger.info('y_true count: %s',len(y_true_train))
+    vals, counts = np.unique(y_true_train, return_counts=True)
+    logger.info('vals, counts: %s',[vals, counts])
+
+    logger.info('Test Data')
+    y_true_test = np.concatenate([y for x, y in test_dataset], axis=0)
+    logger.info('y_true count: %s',len(y_true_test))
+    vals, counts = np.unique(y_true_test, return_counts=True)
+    logger.info('vals, counts: %s',[vals, counts])
+
+    logger.info('Val Data')
+    y_true_val = np.concatenate([y for x, y in val_dataset], axis=0)
+    logger.info('y_true count: %s',len(y_true_val))
+    vals, counts = np.unique(y_true_val, return_counts=True)
+    logger.info('vals, counts: %s',[vals, counts])
+    
     train_dataset = train_dataset.shuffle(
         buffer_size, reshuffle_each_iteration=True)
     
@@ -151,7 +178,9 @@ def main():
         mode="auto",
         save_freq="epoch",
     )
-    callbacks = [cm_callback, save_model_callback, tb_callback]
+    callbacks = [cm_callback, 
+                 save_model_callback,
+                 tb_callback]
 
     if early_stopping_patience is not None:
         logger.info(f"Using early stopping. Patience: {early_stopping_patience}")
@@ -173,9 +202,12 @@ def main():
     logger.info("Training history:")
     logger.info(pformat(history.history))
     
+    # perform evaluation on validation set if it exists
     if val_split is not None:
         logger.info(f"loading model weights from checkpoint: {checkpoint}")
+        model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function)
         model.load_weights(checkpoint)
+        freeze(model) # freeze weights for inference
         eval = model.evaluate(val_dataset,return_dict=True)
         logger.info(f"Validation: {pformat(eval)}")
 

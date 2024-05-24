@@ -137,7 +137,7 @@ def dice_loss(y_true, y_pred, smooth=1):
 evaluation_metrics = [categorical_accuracy, f1_m, precision_m, recall_m]
 
 
-def resnet():
+def resnet(training_mode=True):
 
     input_shape = (32, 32, 4)
     # Load the base ResNet model without the top (classifier) layers and without pre-trained weights
@@ -153,7 +153,7 @@ def resnet():
 
     # Pass the input to the base model
     x = base_model(
-        inputs, training=True
+        inputs, training=training_mode
     )  # Set training=True to enable BatchNormalization layers
 
     # Add custom top layers
@@ -238,16 +238,38 @@ model_dict = {
 custom_loss_funcs = {"dice_loss": dice_loss, "bce_sum": bce_sum}
 
 
+def freeze(model):
+    """Freeze model weights in every layer."""
+    for layer in model.layers:
+        layer.trainable = False
+
+        if isinstance(layer, keras.models.Model):
+            freeze(layer)
+    model.trainable=False
+    return model
+
+def unfreeze(model):
+    """Unfreeze model weights in every layer."""
+    for layer in model.layers:
+        layer.trainable = True
+
+        if isinstance(layer, keras.models.Model):
+            unfreeze(layer)
+    model.trainable=True
+    return model
+
 def get_model(model_name, **kwargs):
     metrics = [
-        dice_coef,
-        "binary_accuracy",
+        tf.keras.metrics.BinaryAccuracy(),
+        tf.keras.metrics.Precision(),
+        tf.keras.metrics.Recall(),
+        dice_coef
     ]
     if model_name in model_dict:
         print(f"Model found: {model_name}")
         model_function = model_dict[model_name]
         loss = custom_loss_funcs.get(kwargs["loss_fn"], kwargs["loss_fn"])
-        model = model_function()
+        model = model_function(training_mode = kwargs["training_mode"])
         model.compile(optimizer=kwargs["optimizer"], loss=loss, metrics=metrics)
         return model
     else:
@@ -260,5 +282,5 @@ if __name__ == "__main__":
     optimizer = "adam"
     loss_fn = "binary_crossentropy"
     metrics = ["accuracy"]
-    m = get_model(model_name, optimizer=optimizer, loss_fn=loss_fn, metrics=metrics)
+    m = get_model(model_name, optimizer=optimizer, loss_fn=loss_fn, metrics=metrics, training_mode=False)
     m.summary()
