@@ -17,7 +17,9 @@ def _parse_function(proto):
     return image, label
 
 
-def load_dataset_from_tfrecords(tfrecord_dir, batch_size=32, buffer_size=100, seed=42):
+def load_dataset_from_tfrecords(
+    tfrecord_dir, batch_size=32, buffer_size=100, seed=4, shuffle: bool = True
+):
 
     pattern = tfrecord_dir + "/*.tfrecord.gz"
     files = tf.data.Dataset.list_files(pattern, shuffle=False)
@@ -29,10 +31,14 @@ def load_dataset_from_tfrecords(tfrecord_dir, batch_size=32, buffer_size=100, se
     dataset = dataset.map(_parse_function, num_parallel_calls=tf.data.AUTOTUNE).batch(
         batch_size, drop_remainder=True
     )
-    dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed)
+    if shuffle:
+        dataset = dataset.shuffle(buffer_size=buffer_size, seed=seed)
     return dataset
 
-def split_dataset(dataset, total_examples, test_split=0.2, batch_size=32, val_split=None):
+
+def split_dataset(
+    dataset, total_examples, test_split=0.2, batch_size=32, val_split=None
+):
     if val_split:
         val_size = int(total_examples * val_split)
         test_size = int(total_examples * test_split)
@@ -42,17 +48,19 @@ def split_dataset(dataset, total_examples, test_split=0.2, batch_size=32, val_sp
         val_batches = val_size // batch_size
         test_batches = test_size // batch_size
         train_batches = train_size // batch_size
-        
+
         val_dataset = dataset.take(val_batches).prefetch(tf.data.AUTOTUNE)
         test_dataset = (
             dataset.skip(val_batches).take(test_batches).prefetch(tf.data.AUTOTUNE)
         )
         train_dataset = (
-            dataset.skip(val_batches + test_batches).take(train_batches).prefetch(tf.data.AUTOTUNE)
+            dataset.skip(val_batches + test_batches)
+            .take(train_batches)
+            .prefetch(tf.data.AUTOTUNE)
         )
 
         return train_dataset, test_dataset, val_dataset
-    
+
     else:
         test_size = int(total_examples * test_split)
         train_size = total_examples - test_size
@@ -60,8 +68,7 @@ def split_dataset(dataset, total_examples, test_split=0.2, batch_size=32, val_sp
         # Calculate the number of batches for train and test sets
         train_batches = train_size // batch_size
         test_batches = test_size // batch_size
-        
-        
+
         train_dataset = dataset.take(train_batches).prefetch(tf.data.AUTOTUNE)
         test_dataset = (
             dataset.skip(train_batches).take(test_batches).prefetch(tf.data.AUTOTUNE)
