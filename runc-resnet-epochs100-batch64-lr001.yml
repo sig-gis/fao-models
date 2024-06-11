@@ -1,0 +1,18 @@
+experiment_name: resnet-epochs100-batch64-lr001
+model_name: resnet
+data_dir: tfrecords/all
+checkpoint: saved_models/resnet-epochs100-batch64-lr001/best_model.h5
+total_examples: 76992 # number of geotiffs not tfrecords
+test_split: 0.2 # float or null
+val_split: 0.1
+
+optimizer: adam
+optimizer_use_lr_schedular: true
+loss_function: binary_crossentropy
+
+epochs: 100
+learning_rate: 0.001
+batch_size: 64
+buffer_size: 76992
+
+early_stopping_patience: null # null or int

@@ -4,7 +4,7 @@
 import dataloader as dl
 import numpy as np
 
-data_dir = "tfrecords/all"
+data_dir = "C:\\fao-models\\tfrecords\\all"
 batch_size = 64
 buffer_size = 135232
 total_examples = buffer_size
@@ -55,7 +55,7 @@ from models import get_model, freeze
 from pprint import pformat
 import numpy as np
 
-checkpoint = "expriments/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5"
+checkpoint = "C:\\fao-models\\saved_models\\resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all\\best_model.h5"
 # checkpoint = "C:\\fao-models\\saved_models\\mobilenet_v3small_batch255\\best_model.h5"
 model = get_model(
     model_name="resnet",
@@ -168,3 +168,5 @@ print("eval result", eval.get("recall"))
 # print('y_true, y_pred')
 # for i in list(zip(y_true_val[:10],np.round(y_pred_val)[:10])):
 #     print(i)
+
+# %%

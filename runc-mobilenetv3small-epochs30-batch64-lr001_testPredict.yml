@@ -1,0 +1,21 @@
+experiment_name: mobilenetv3small-epochs30-batch64-lr001
+model_name: mobilenet_v3small
+data_dir: tfrecords/train_test
+val_data_dir: tfrecords/val
+checkpoint: saved_models/mobilenetv3small-epochs30-batch64-lr001/best_model.h5
+total_examples: 70000 # number of geotiffs not tfrecords
+test_split: 0.2 # float or null
+val_split: 0.1
+seed: 5
+decay_rate: 1
+
+optimizer: adam
+optimizer_use_lr_schedular: true
+loss_function: binary_crossentropy
+
+epochs: 30
+learning_rate: 0.001
+batch_size: 64
+buffer_size: 76992
+
+early_stopping_patience: 5 # null or int

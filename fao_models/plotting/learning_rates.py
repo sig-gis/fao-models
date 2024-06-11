@@ -102,7 +102,7 @@ for epochs in [5,10,15,30,50,100]:
 # for ITD decay rate needs to be more aggressive the more epochs we have
 # ((steps_per_epoch * epochs) ** 1/5) * 2
 lr = 0.001
-lr_decay = 1.5
+lr_decay = 5
 for epochs in [5,10,15,30,50,100]:
     decay_steps = ((steps_per_epoch * epochs) ** 1/5)*2
     lr_decay = lr_decay ** 1/5 if lr_decay > 1 else lr_decay
