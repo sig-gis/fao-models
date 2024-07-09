@@ -161,7 +161,7 @@ def pipeline(beam_options, dotargs: SimpleNamespace):
             | "Write String To CSV"
             >> WriteToText(dotargs.output, header=",".join(cols))
         )
-
+        print('pipeline ran')
 
 # test file
 # file = 'C:\\Users\\kyle\\Downloads\\FRA_hex_shp_5records.shp'
