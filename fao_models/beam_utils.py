@@ -6,11 +6,11 @@ from google.api_core import retry
 import numpy as np
 from models import get_model, freeze
 
-def parse_shp_to_latlon(file):
+def parse_shp_to_latlon(file,id_field:str='PLOTID'):
     gdf = gpd.read_file(file)
     gdf.loc[:,'centroid'] = gdf.geometry.centroid
     gdf.loc[:,'lonlat'] = gdf.centroid.apply(lambda x: [x.x, x.y])
-    return gdf[['global_id', 'lonlat']].values.tolist()
+    return gdf[[id_field, 'lonlat']].values.tolist()
 
 def get_ee_img(coords):
     """retrieve s2 image composite from ee at given coordinates. coords is a tuple of (lon, lat) in degrees."""

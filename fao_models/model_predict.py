@@ -1,7 +1,7 @@
 import numpy as np
 import datetime
 import logging
-from .models import get_model
+from models import get_model
 import os
 import tensorflow as tf
 import rasterio as rio
@@ -63,11 +63,11 @@ def main(config: str | dict):
     loss_function = config["loss_function"]
 
     model = load_predict_model(model_name, optimizer, loss_function, weights)
-
+    print(model.summary())
     # load image
     # local file as placeholder
     # img = "data/patch_pt9097_nonforest.tif"
-    img = "data_qa_old_caf\patch_pt0_nonforest.tif"
+    img = "data\\data_qa_old_caf\\patch_pt0_nonforest.tif"
     with rio.open(img) as dst:
         data = dst.read() / 10_000
         profile = dst.profile
