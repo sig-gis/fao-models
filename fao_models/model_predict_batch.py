@@ -4,7 +4,6 @@ import logging
 from models import get_model, freeze
 import os
 import tensorflow as tf
-import rasterio as rio
 import yaml
 import argparse
 import dataloader as dl
@@ -47,7 +46,7 @@ def cli():
 
 
 def load_predict_model(model_name, optimizer, loss_function, weights):
-    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function)
+    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function, training_mode=False)
     model.load_weights(weights)
     freeze(model) # freeze model layers before loading weights
 

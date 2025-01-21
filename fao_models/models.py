@@ -119,6 +119,7 @@ def dice_coef(y_true, y_pred, smooth=1):
     __name__ = "dice_coef"
     y_true_f = backend.flatten(y_true)
     y_pred_f = backend.flatten(y_pred)
+    y_true_f = tf.cast(y_true_f, dtype=tf.float32)  # Cast y_true_f to float32
     intersection = backend.sum(y_true_f * y_pred_f)
     return (2.0 * intersection + smooth) / (
         backend.sum(y_true_f) + backend.sum(y_pred_f) + smooth
@@ -275,7 +276,12 @@ def get_model(model_name, **kwargs):
     else:
         raise NotImplementedError(f"Model '{model_name}' not found.")
 
+def load_predict_model(model_name, optimizer, loss_function, weights):
+    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function, training_mode=False)
+    model.load_weights(weights)
+    freeze(model) # freeze model layers before loading weights
 
+    return model
 if __name__ == "__main__":
     # Example usage
     model_name = "resnet"

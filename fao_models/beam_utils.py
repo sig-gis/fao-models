@@ -1,13 +1,15 @@
 import geopandas as gpd
 import ee
-import google.auth
 import io
 from google.api_core import retry
 import numpy as np
-from models import get_model, freeze
+from models import get_model, freeze, load_predict_model
+
+
 
 def parse_shp_to_latlon(file,id_field:str='PLOTID'):
     gdf = gpd.read_file(file)
+    gdf.geometry.to_crs(epsg=3857)
     gdf.loc[:,'centroid'] = gdf.geometry.centroid
     gdf.loc[:,'lonlat'] = gdf.centroid.apply(lambda x: [x.x, x.y])
     return gdf[[id_field, 'lonlat']].values.tolist()
@@ -94,44 +96,9 @@ def to_tensor(patch):
     reshaped = np.reshape(rescaled, (1, 32, 32, 4)) # batch it
     return reshaped
 
-def make_inference(tensor):
-    """Loads model for inference and returns prediction on the provided tensor"""
-    import numpy as np
-    # 20-epoch resnet trained on full tfrecord set (tfrecords/all)
-    model_name = "resnet"
-    optimizer = "adam"
-    loss_function = "binary_crossentropy"
-    checkpoint = "C:\\fao-models\\saved_models\\resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all\\best_model.h5"
-    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function, training_mode=True)
-    model.load_weights(checkpoint)
-    freeze(model)
-
+def make_inference(model,tensor):
+    """returns model prediction on the provided tensor"""
     prob = round(float(model(tensor).numpy()),2)
-    prediction = "Forest" if prob > 0.5 else "Non-Forest"
-    return prob, prediction
-
-# testing
-
-# PROJECT = "pc530-fao-fra-rss"  # change to your cloud project name
-
-# ## INIT WITH HIGH VOLUME ENDPOINT
-# credentials, _ = google.auth.default()
-# ee.Initialize(
-# credentials,
-# project=PROJECT,
-# opt_url="https://earthengine-highvolume.googleapis.com",)
-
-# pColl = parse_shp_to_latlon('C:\\Users\\kyle\\Downloads\\FRA_hex_shp_5records.shp')
-# coords = []
-# preds = []
-# for nested_l in pColl:
-#     coord = nested_l[1]
-#     img = get_ee_img(coord)
-#     patch = get_patch_numpy(coord, img)
-#     tensor = to_tensor(patch)
-#     prediction = make_inference(tensor)
-#     coords.append(coord)
-#     preds.append(prediction)
-# print(coords)
-# print(preds)
+    prediction = 1 if prob > 0.5 else 0
+    return [prob, prediction]
 

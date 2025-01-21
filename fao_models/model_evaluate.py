@@ -44,7 +44,7 @@ def main():
     print(pformat(config))
     
     # load model from checkpoint
-    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function)
+    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function, training_mode=False)
     model.load_weights(checkpoint)
     freeze(model) # freeze weights for inference
     print(model.summary())

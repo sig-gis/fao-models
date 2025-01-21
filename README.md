@@ -17,6 +17,15 @@ This particular repo (see its cousin [sig-ssl4eo](https://github.com/sig-gis/sig
 
 ### Setup
 
+In a virtual environment, install the following packages:
+python=3.11
+tensorflow[and-cuda] if you have a GPU or tensorflow for CPU
+matplotlib
+scikit-learn
+pyyaml
+
+`conda install -c conda-forge "python >=3.9,<=3.12" geopandas rasterio scikit-learn pyyaml`
+
 ### Inference
 
 ### Creating Configs
