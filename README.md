@@ -15,16 +15,17 @@ This particular repo (see its cousin [sig-ssl4eo](https://github.com/sig-gis/sig
 -   Documentation: https://kyle-woodward.github.io/fao-models
     
 
-### Setup
+### Setup (inference only)
 
 In a virtual environment, install the following packages:
-python=3.11
-tensorflow[and-cuda] if you have a GPU or tensorflow for CPU
-matplotlib
-scikit-learn
-pyyaml
+python=3.12 (conda-forge)
+geopandas (conda-forge)
+earthengine-api (conda-forge)
+scikit-learn (conda-forge)
+tensorflow[and-cuda] (if you have a GPU) or tensorflow (for CPU) (pip)
+pyyaml (pip)
 
-`conda install -c conda-forge "python >=3.9,<=3.12" geopandas rasterio scikit-learn pyyaml`
+(working on a replicable env file to use)
 
 ### Inference
 
