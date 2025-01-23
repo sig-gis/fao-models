@@ -276,8 +276,8 @@ def get_model(model_name, **kwargs):
     else:
         raise NotImplementedError(f"Model '{model_name}' not found.")
 
-def load_predict_model(model_name, optimizer, loss_function, weights):
-    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_function, training_mode=False)
+def load_predict_model(model_name, optimizer, loss_fn, weights):
+    model = get_model(model_name, optimizer=optimizer, loss_fn=loss_fn, training_mode=False)
     model.load_weights(weights)
     freeze(model) # freeze model layers before loading weights
 

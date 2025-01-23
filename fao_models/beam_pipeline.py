@@ -1,27 +1,39 @@
-import collections
-import typing
+import os
+from pathlib import Path
+import logging
 import argparse
+import datetime
+
 from types import SimpleNamespace
 import csv
 import io
-import logging
+
+import pandas as pd
+import geopandas as gpd
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.io import ReadFromCsv, WriteToText
+from apache_beam.io import WriteToText
 
 from beam_utils import parse_shp_to_latlon
 from common import load_yml
 
 
-# want my pipeline to have these general steps
+# pipeline to have these general steps
 
 # 1. Read in data from SHP (hexagons were provided as SHP and CSV but CSV has no geom column, centroids only came as SHP file)
 # 2. parse data into row-wise elements of (global id, [lon,lat]) - rest of pipeline passes these elements through
 # 3. download imagery for each element and convert to a tensor
 # 4. load model and run inference on tensor to return prediction value
 # 5. write prediction value to new CSV file with (global id, lat, long, prediction value)
+# 6. join CSV file(s) with model predictions back to the original SHP File and export as a new SHP file
 
+logging.basicConfig(
+    filename=f"forest-classifier-beam-{datetime.datetime.now().strftime("%Y-%m-%d, %H:%M:%S")}.log",
+    encoding="utf-8",
+    format="%(asctime)s - %(message)s",
+    level=logging.INFO,
+)
 
 class GetPatch(beam.DoFn):
     def __init__(self):
@@ -51,8 +63,8 @@ class GetPatch(beam.DoFn):
         patch_tensor = to_tensor(patch)
 
         yield {
-            "id": global_id,
-            "long": coords[0],
+            "PLOTID": global_id,
+            "lon": coords[0],
             "lat": coords[1],
             "patch": patch_tensor,
         }
@@ -69,16 +81,14 @@ class Predict(beam.DoFn):
 
     def setup(self):
         # load the model
-        from models import get_model, freeze
+        from models import load_predict_model
 
-        self.model = get_model(
+        self.model = load_predict_model(
             model_name=self._config["model_name"],
             optimizer=self._config["optimizer"],
             loss_fn=self._config["loss_function"],
-            training_mode=True,
+            weights=self._config["checkpoint"],
         )
-        self.model.load_weights(self._config["checkpoint"])
-        freeze(self.model)
 
         return super().setup()
 
@@ -90,11 +100,11 @@ class Predict(beam.DoFn):
         prediction = "Forest" if prob > 0.5 else "Non-Forest"
 
         yield {
-            "id": element["id"],
-            "long": element["long"],
+            "PLOTID": element["PLOTID"],
+            "lon": element["lon"],
             "lat": element["lat"],
-            "prob_label": prob,
-            "pred_label": prediction,
+            "r50_prob": prob,
+            "r50_pred": prediction,
         }
 
 
@@ -146,25 +156,27 @@ class DictToCSVString(beam.DoFn):
 
 
 def pipeline(beam_options, dotargs: SimpleNamespace):
+    import time
+    st = time.time()
+    logging.info(f"Running Beam Pipeline with arguments: {dotargs}, and beam_options: {beam_options}")
     if beam_options is not None:
         beam_options = PipelineOptions(**load_yml(beam_options))
 
     pColl = parse_shp_to_latlon(dotargs.input)
-    cols = ["id", "long", "lat", "prob_label", "pred_label"]
+    cols = ["PLOTID", "lon", "lat", "r50_prob", "r50_pred"]
     with beam.Pipeline() as p:
-        var = (
+        forest_pipeline = (
             p
             | "Construct PCollection" >> beam.Create(pColl)
             | "Get Patch" >> beam.ParDo(GetPatch())
             | "Predict" >> beam.ParDo(Predict(config_path=dotargs.model_config))
             | "Dict To CSV String" >> beam.ParDo(DictToCSVString(cols))
-            | "Write String To CSV"
-            >> WriteToText(dotargs.output, header=",".join(cols))
+            | "Write String To CSV" >> WriteToText(dotargs.output, header=",".join(cols))
         )
-        print('pipeline ran')
+        print()
+    
+    logging.info(f"Pipeline completed in {time.time()-st} seconds")
 
-# test file
-# file = 'C:\\Users\\kyle\\Downloads\\FRA_hex_shp_5records.shp'
 def run():
     argparse.FileType()
 
@@ -177,6 +189,26 @@ def run():
     args = parser.parse_args()
 
     pipeline(beam_options=args.beam_config, dotargs=args)
+    
+    logging.info(f"merging outputs to one dataframe")
+    _cur = Path(args.input)
+    _parent = _cur.parent
+    _merged = _parent/ f"{_cur.stem}_merged.shp"
+    files = [(_parent/ file) for file in os.listdir(_parent) if file.startswith(Path(args.output).stem)]
+
+    # merge all .csv shard files
+    df = pd.concat([pd.read_csv(file) for file in files])
+    logging.info(f"joining model predictions with input shapefile: {args.input}")
+    
+    # join it with the input shapefile 
+    shp = gpd.read_file(args.input)
+    shp['PLOTID'] = shp['PLOTID'].astype('int64')
+    # inner join the df with args.input on the PLOTID column
+    joined = shp.join(df.set_index('PLOTID'), on='PLOTID')
+
+    # save the geodataframe as a shapefile
+    logging.info(f"writing merged shapefile to: {_merged}")
+    joined.to_file(_merged)
 
 
 if __name__ == "__main__":

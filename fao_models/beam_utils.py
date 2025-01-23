@@ -3,9 +3,6 @@ import ee
 import io
 from google.api_core import retry
 import numpy as np
-from models import get_model, freeze, load_predict_model
-
-
 
 def parse_shp_to_latlon(file,id_field:str='PLOTID'):
     gdf = gpd.read_file(file)
