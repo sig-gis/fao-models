@@ -97,7 +97,7 @@ class Predict(beam.DoFn):
         model = self.model
         patch = element["patch"]
         prob = round(float(model(patch).numpy()), 2)
-        prediction = "Forest" if prob > 0.5 else "Non-Forest"
+        prediction = 1 if prob > 0.5 else 0
 
         yield {
             "PLOTID": element["PLOTID"],
@@ -193,7 +193,6 @@ def run():
     logging.info(f"merging outputs to one dataframe")
     _cur = Path(args.input)
     _parent = _cur.parent
-    _merged = _parent/ f"{_cur.stem}_merged.shp"
     files = [(_parent/ file) for file in os.listdir(_parent) if file.startswith(Path(args.output).stem)]
 
     # merge all .csv shard files
@@ -207,8 +206,8 @@ def run():
     joined = shp.join(df.set_index('PLOTID'), on='PLOTID')
 
     # save the geodataframe as a shapefile
-    logging.info(f"writing merged shapefile to: {_merged}")
-    joined.to_file(_merged)
+    logging.info(f"writing merged shapefile to: {args.output}")
+    joined.to_file(args.output)
 
 
 if __name__ == "__main__":
