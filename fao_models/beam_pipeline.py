@@ -57,7 +57,7 @@ class GetPatch(beam.DoFn):
         # element is a tuple of (global_id, [lon,lat])
         global_id = element[0]
         coords = element[1]
-
+        logging.info(f"Getting Imagery for {global_id} at {coords}")
         image = get_ee_img(coords)
         patch = get_patch_numpy(coords, image)
         patch_tensor = to_tensor(patch)
@@ -98,7 +98,7 @@ class Predict(beam.DoFn):
         patch = element["patch"]
         prob = round(float(model(patch).numpy()), 2)
         prediction = 1 if prob > 0.5 else 0
-
+        logging.info(f"Prediction for {element['PLOTID']} is {prob} | {prediction}")
         yield {
             "PLOTID": element["PLOTID"],
             "lon": element["lon"],
@@ -147,6 +147,7 @@ class DictToCSVString(beam.DoFn):
         filtered_element = {
             key: value for (key, value) in element.items() if key in fieldnames
         }
+        logging.info(f"Writing {filtered_element} to CSV")
         with io.StringIO() as stream:
             writer = csv.DictWriter(stream, fieldnames)
             writer.writerow(filtered_element)
@@ -155,16 +156,29 @@ class DictToCSVString(beam.DoFn):
         yield csv_string
 
 
-def pipeline(beam_options, dotargs: SimpleNamespace):
+def pipeline(dotargs: SimpleNamespace):
     import time
     st = time.time()
-    logging.info(f"Running Beam Pipeline with arguments: {dotargs}, and beam_options: {beam_options}")
-    if beam_options is not None:
-        beam_options = PipelineOptions(**load_yml(beam_options))
 
     pColl = parse_shp_to_latlon(dotargs.input)
     cols = ["PLOTID", "lon", "lat", "r50_prob", "r50_pred"]
-    with beam.Pipeline() as p:
+    
+    # TODO: difficulty constructing PipelineOptions obj correctly to pass to beam.Pipeline()
+    # this affects ability to host on Dataflow with DataflowRunner vs locally with DirectRunner
+    # options = PipelineOptions(['--runner', 'Direct',
+    #                            '--direct_num_workers', 32,
+    #                            '--direct_running_mode', 'multi_processing']
+    #                            )
+    # options = PipelineOptions(
+    #                             direct_num_workers=32,
+    #                             direct_running_mode="multi_processing"
+    #                            )
+    # options = PipelineOptions(runner=dotargs.runner,
+    #                         direct_num_workers=dotargs.direct_num_workers,
+    #                         direct_running_mode=dotargs.direct_running_mode
+    #                         )
+    # print(options.get_all_options())
+    with beam.Pipeline() as p: # no options till i figure out how to pass them to beam.Pipeline() 
         forest_pipeline = (
             p
             | "Construct PCollection" >> beam.Create(pColl)
@@ -184,16 +198,21 @@ def run():
     parser.add_argument("--input", "-i", type=str, required=True)
     parser.add_argument("--output", "-o", type=str, required=True)
     parser.add_argument("--model-config", "-mc", type=str, required=True)
+    
     group = parser.add_argument_group("pipeline-options")
-    group.add_argument("--beam-config", "-bc", type=str)
+    group.add_argument("--runner", "-r", type=str, required=False)
+    group.add_argument("--direct-num-workers", "-d", type=int, required=False)
+    group.add_argument("--direct-running-mode", "-m", type=str, required=False)
     args = parser.parse_args()
-
-    pipeline(beam_options=args.beam_config, dotargs=args)
+    print(args.runner)
+    print(args.direct_num_workers)
+    print(args.direct_running_mode)
+    pipeline(dotargs=args)
     
     logging.info(f"merging outputs to one dataframe")
-    _cur = Path(args.input)
-    _parent = _cur.parent
+    _parent = Path(args.output).parent
     files = [(_parent/ file) for file in os.listdir(_parent) if file.startswith(Path(args.output).stem)]
+    logging.info(f"Merging {len(files)} files")
 
     # merge all .csv shard files
     df = pd.concat([pd.read_csv(file) for file in files])
