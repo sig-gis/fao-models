@@ -16,18 +16,26 @@ from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io import WriteToText
 
 from beam_utils import parse_shp_to_latlon
-from common import load_yml
 
+"""
+# This script is a Beam pipeline that does the following:
 
-# pipeline to have these general steps
+# Pre-pipeline
+1. Read in data from input SHP (hexagons/centroids provided as SHP)
+2. parse data into row-wise tuples of (global id, [lon,lat]) - this is passed in as the beginning PCollection for the Beam pipeline
 
-# 1. Read in data from SHP (hexagons were provided as SHP and CSV but CSV has no geom column, centroids only came as SHP file)
-# 2. parse data into row-wise elements of (global id, [lon,lat]) - rest of pipeline passes these elements through
-# 3. download imagery for each element and convert to a tensor
-# 4. load model and run inference on tensor to return prediction value
-# 5. write prediction value to new CSV file with (global id, lat, long, prediction value)
-# 6. join CSV file(s) with model predictions back to the original SHP File and export as a new SHP file
+# Pipeline (beam workers do the following)
+3. download imagery for each element and convert to a tensor
+4. load model and run inference on tensor to return prediction value
+5. write prediction value to new CSV file with (global id, lat, long, prediction value)
+6. join CSV file(s) with model predictions back to the original SHP File and export as a new SHP file
 
+# Post-pipeline processing
+7. merge all CSV files into one dataframe
+8. join the model predictions with the input shapefile
+9. save the geodataframe as a shapefile
+
+"""
 logging.basicConfig(
     filename=f"forest-classifier-beam-{datetime.datetime.now().strftime("%Y-%m-%d, %H:%M:%S")}.log",
     encoding="utf-8",
@@ -163,8 +171,9 @@ def pipeline(dotargs: SimpleNamespace):
     pColl = parse_shp_to_latlon(dotargs.input)
     cols = ["PLOTID", "lon", "lat", "r50_prob", "r50_pred"]
     
-    # TODO: difficulty constructing PipelineOptions obj correctly to pass to beam.Pipeline()
-    # this affects ability to host on Dataflow with DataflowRunner vs locally with DirectRunner
+    # TODO: to eventually be able to run beam pipeline as a GCP Dataflow job we need to be able to 
+    # constructing PipelineOptions obj correctly to pass to beam.Pipeline()
+    # right now we're only running locally with DirectRunner which is default when no options are passed
     # options = PipelineOptions(['--runner', 'Direct',
     #                            '--direct_num_workers', 32,
     #                            '--direct_running_mode', 'multi_processing']
