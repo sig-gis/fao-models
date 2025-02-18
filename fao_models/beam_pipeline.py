@@ -28,12 +28,11 @@ from beam_utils import parse_shp_to_latlon
 3. download imagery for each element and convert to a tensor
 4. load model and run inference on tensor to return prediction value
 5. write prediction value to new CSV file with (global id, lat, long, prediction value)
-6. join CSV file(s) with model predictions back to the original SHP File and export as a new SHP file
 
 # Post-pipeline processing
-7. merge all CSV files into one dataframe
-8. join the model predictions with the input shapefile
-9. save the geodataframe as a shapefile
+6. merge all CSV files into one dataframe
+7. join the model predictions with the input shapefile
+8. save the geodataframe as a shapefile
 
 """
 logging.basicConfig(
