@@ -9,6 +9,9 @@ logs/
 
 # models
 saved_models/*
+*.pt
+*.pth
+fao_models/predictions
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
