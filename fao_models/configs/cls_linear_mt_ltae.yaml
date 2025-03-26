@@ -1,0 +1,9 @@
+encoder: null
+
+topology: [512,512]
+num_classes: 4
+multi_temporal: 2
+
+multi_temporal_strategy: ltae
+softmax: true
+pooling_strategy: max
