@@ -1,11 +1,10 @@
 # testing
 import os
+from pathlib import Path
 import argparse
 import ee
 import google.auth
 import yaml
-import beam_utils
-from shapely.geometry import Point
 import geopandas as gpd
 import tqdm
 
@@ -55,15 +54,6 @@ def main():
     
     gsd = 10
     size = 32
-    
-    # parser = argparse.ArgumentParser(description="Run inference on Sentinel-2 images.")
-    # parser.add_argument("-c", "--config", type=str, required=True, help="Path to the config file.")
-    # parser.add_argument("-f", "--file", type=str, required=True, help="Path to the shapefile.")
-    
-    # args = parser.parse_args()
-    # -c runc-resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all.yml -f /home/kyle/Downloads/hexagons_NEW_Brazil_test_subset.shp
-
-    
     
     shapefile_path = args.shapefile
     features = gpd.read_file(shapefile_path)
@@ -120,20 +110,19 @@ def main():
 
     preds = pd.DataFrame.from_dict({
         'PLOTID':plotids,
-        'Prediction':preds,
-        'Stable Non Forest Conf':confs_matrix[:,0],
-        'Stable Forest Conf':confs_matrix[:,1],
-        'Forest Gain Conf':confs_matrix[:,2],
-        'Forest Loss Conf':confs_matrix[:,3]
+        'CD_Pred':preds,
+        'SNF_Conf':confs_matrix[:,0],
+        'SF_Conf':confs_matrix[:,1],
+        'FL_Conf':confs_matrix[:,2],
+        'FG_Conf':confs_matrix[:,3]
     })
 
-    out_file = os.path.join(args.outfile,shapefile_path.split('/')[-1].split('.')[0],)
-
-    if not os.path.isdir(out_file):
-        os.makedirs(out_file)
-    preds.to_csv(os.path.join(out_file,'preds.csv'))
-
-    print(f'Predictions Saved to {out_file}')
+    joined = features.merge(preds,on='PLOTID')
+    
+    Path(args.outfile).parent.mkdir(parents=True,exist_ok=True)
+    joined.to_file(args.outfile,driver='ESRI Shapefile')
+    
+    print(f'Predictions Saved to {args.outfile}')
 
 if __name__ == "__main__":
     main()

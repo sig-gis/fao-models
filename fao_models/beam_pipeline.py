@@ -104,14 +104,14 @@ class Predict(beam.DoFn):
         model = self.model
         patch = element["patch"]
         prob = round(float(model(patch).numpy()), 2)
-        prediction = 1 if prob > 0.5 else 0
+        prediction = "Forest" if prob > 0.5 else "Non-Forest"
         logging.info(f"Prediction for {element['PLOTID']} is {prob} | {prediction}")
         yield {
             "PLOTID": element["PLOTID"],
             "lon": element["lon"],
             "lat": element["lat"],
-            "r50_prob": prob,
-            "r50_pred": prediction,
+            "FNF_prob": prob,
+            "FNF_pred": prediction,
         }
 
 
@@ -168,7 +168,7 @@ def pipeline(dotargs: SimpleNamespace):
     st = time.time()
 
     pColl = parse_shp_to_latlon(dotargs.input)
-    cols = ["PLOTID", "lon", "lat", "r50_prob", "r50_pred"]
+    cols = ["PLOTID", "lon", "lat", "FNF_prob", "FNF_pred"]
     
     # TODO: to eventually be able to run beam pipeline as a GCP Dataflow job we need to be able to 
     # constructing PipelineOptions obj correctly to pass to beam.Pipeline()
@@ -212,14 +212,15 @@ def run():
     group.add_argument("--direct-num-workers", "-d", type=int, required=False)
     group.add_argument("--direct-running-mode", "-m", type=str, required=False)
     args = parser.parse_args()
-    print(args.runner)
-    print(args.direct_num_workers)
-    print(args.direct_running_mode)
+    # print(args.runner)
+    # print(args.direct_num_workers)
+    # print(args.direct_running_mode)
     pipeline(dotargs=args)
     
     logging.info(f"merging outputs to one dataframe")
     _parent = Path(args.output).parent
-    files = [(_parent/ file) for file in os.listdir(_parent) if file.startswith(Path(args.output).stem)]
+    # find all .csv shards created by pipeline
+    files = [(_parent/ file) for file in os.listdir(_parent) if file.startswith(Path(args.output).stem) and 'shp-0' in file]
     logging.info(f"Merging {len(files)} files")
 
     # merge all .csv shard files
@@ -235,6 +236,13 @@ def run():
     # save the geodataframe as a shapefile
     logging.info(f"writing merged shapefile to: {args.output}")
     joined.to_file(args.output)
+
+    # delete temp files created by beam
+    # beam_temps = [file for file in os.listdir(_parent) if 'beam-temp' in file] # think this is auto-deleted by beam, not 100% sure
+    # beam_shards = [file for file in os.listdir(_parent) if '.shp-0' in file]
+    # # print(beam_temps, beam_shards)
+    # for file in beam_shards:
+    #     os.remove(_parent/file)
 
 
 if __name__ == "__main__":
