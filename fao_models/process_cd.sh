@@ -1,7 +1,7 @@
 conda activate pangaea-bench
 
 python cd_inference_pipeline.py \
-    --shapefile ./data/FRA_plots_DemocraticRepublicoftheCongo/centroid_OLD_DemocraticRepublicoftheCongo/centroid_OLD_DemocraticRepublicoftheCongo.shp \
+    --shapefile ./data/FRA_plots_DemocraticRepublicoftheCongo/centroid_OLDMang_DemocraticRepublicoftheCongo/centroid_OLDMang_DemocraticRepublicoftheCongo.shp \
     --outfile ./predictions/\
     --configs ./configs/ \
     --model prithvi \

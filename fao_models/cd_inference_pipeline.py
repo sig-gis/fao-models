@@ -12,6 +12,7 @@ import tqdm
 import argparse
 
 import torch
+
 import numpy as np
 import pandas as pd
 
@@ -92,9 +93,12 @@ def main():
 
         arr1 = get_arr_from_geom_centr(image=image1, geom=geometry, gsd=gsd, size=size)
         arr1_normed = (arr1 - means[:,None,None]) / stds[:,None,None]
-        
+        # print(arr1_normed)
+
+
         arr2 = get_arr_from_geom_centr(image=image2, geom=geometry, gsd=gsd, size=size)
         arr2_normed = (arr2 - means[:,None,None]) / stds[:,None,None]
+        # print(arr2_normed)
 
         arr1_normed = arr1_normed.astype(np.float32)
         arr2_normed = arr2_normed.astype(np.float32)
@@ -108,8 +112,11 @@ def main():
 
         cls = list(classes.keys())[pred_index]
 
-        # print(cls)
-        # print(pred_index)
+        print(plotid)
+        print(pred)
+        print(cls)
+        print(pred_index)
+    
 
         plotids.append(plotid)
         preds.append(cls)
