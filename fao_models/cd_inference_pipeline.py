@@ -9,6 +9,8 @@ import geopandas as gpd
 import tqdm
 
 import argparse
+import logging
+import datetime
 
 import torch
 
@@ -17,6 +19,13 @@ import pandas as pd
 
 from model.util import build_change_detection_model
 from cd_utils import transform,get_landsat_composite, get_arr_from_geom_centr
+
+logging.basicConfig(
+    filename=f"change-detection-{datetime.datetime.now().strftime("%Y-%m-%d, %H:%M:%S")}.log",
+    encoding="utf-8",
+    format="%(asctime)s - %(message)s",
+    level=logging.INFO,
+)
 
 means = np.array([0.05278337,0.08498019,0.10346901,0.2802707,0.25964622 ,0.16640756])
 stds = np.array([0.03278688, 0.05424733 ,0.08996119 ,0.07969411 ,0.12222017 ,0.12167657])
@@ -71,10 +80,12 @@ def main():
     preds = []
     confs = []
     for i in tqdm.tqdm(transform(features,args.t1start,args.t1end,args.t2start,args.t2end)):
+
         plotid = i['PLOTID']
         geometry = i['geometry']
 
         sample_dates = i['sample_dates']
+        logging.info(f"Getting Imagery for {plotid} at {geometry}")
 
         image1 = get_landsat_composite(region=geometry, start=sample_dates['t1start'], end=sample_dates['t1end'])
         image2 = get_landsat_composite(region=geometry, start=sample_dates['t2start'], end=sample_dates['t2end'])
@@ -101,19 +112,20 @@ def main():
         pred_index = np.argmax(pred.detach().numpy())
 
         cls = list(classes.keys())[pred_index]
-
-        print(plotid)
-        print(pred)
-        print(cls)
-        print(pred_index)
+        # print(plotid)
+        # print(pred)
+        # print(cls)
+        # print(pred_index)
     
 
         plotids.append(plotid)
         preds.append(cls)
         confs.append(pred.detach().numpy())
+        logging.info(f"PLOTID: {plotid} Prediction: {cls} Confidence: {pred.detach().numpy()}")
+
 
     confs_matrix = np.concatenate(confs,axis=0)
-    print(confs_matrix.shape)
+    # print(confs_matrix.shape)
 
     preds = pd.DataFrame.from_dict({
         'PLOTID':plotids,
@@ -129,7 +141,7 @@ def main():
     Path(args.outfile).parent.mkdir(parents=True,exist_ok=True)
     joined.to_file(args.outfile,driver='ESRI Shapefile')
     
-    print(f'Predictions Saved to {args.outfile}')
+    logging.info(f'Predictions Saved to {args.outfile}')
 
 if __name__ == "__main__":
     main()

@@ -135,8 +135,8 @@ def main():
         except subprocess.CalledProcessError as e:
             print(f"Error processing {input_shp_path}: {e.stderr}")
     
-        # merge both model inference shps together and save out
-        print(f"Merging: {out_fnf_shp}\n {out_cd_shp}")
+        # # merge both model inference shps together and save out
+        # print(f"Merging: {out_fnf_shp}\n {out_cd_shp}")
         # merge the two shapefiles
         out_fnf_df = gpd.read_file(out_fnf_shp)
         out_fnf_df.loc[:,'PLOTID'] = out_fnf_df['PLOTID'].astype(int)
@@ -151,9 +151,12 @@ def main():
         out_final_file = output_root / f"{input_shp_path.stem}_both_models.shp"
         both_models_df.to_file(out_final_file)
         print(f"Merged the two shapefiles, saving to {out_final_file}")
+        
         # remove the individual shapefiles
-        for shp in [out_fnf_shp, out_cd_shp]:
-            os.remove(shp)
+        to_delete = [f for f in os.listdir(output_root) if '_both_models' not in f]
+        print(f'removing intmd files: {to_delete}')
+        for f in to_delete:
+            os.remove(output_root / Path(f))
 
 
 if __name__ == "__main__":
