@@ -4,6 +4,7 @@ import subprocess
 import argparse
 import os
 import geopandas as gpd
+import shutil
 
 def main():
     parser = argparse.ArgumentParser(description="Batcher for running multiple beam_pipeline.py instances")
@@ -71,7 +72,10 @@ def main():
                         default= '2023-12-31',
                         help='End date for the second time period for change detection'
                         )
-  
+    parser.add_argument('--cleanup',
+                        action='store_true', 
+                        help='Remove intermediate files after processing'
+                        )
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir).resolve()
@@ -79,7 +83,8 @@ def main():
     inputs_txt = Path(args.inputs).resolve()
     # config = Path(args.config).resolve()
     output_root = Path(out_dir)
-   
+    output_root.mkdir(parents=True, exist_ok=True)
+
 
     with open(inputs_txt) as f:
         shps = f.readlines()
@@ -98,42 +103,47 @@ def main():
         print(f"output cd shp: {out_cd_shp}")        
         
         # Run FNF model pipeline
-        try:
-            result = subprocess.run(
-                ["python", "beam_pipeline.py", 
-                 "--input", str(input_shp_path), 
-                 "--output", str(out_fnf_shp), 
-                 "--model-config", str(args.fnf_config)],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            print(result.stdout)
-        except subprocess.CalledProcessError as e:
-            print(f"Error processing {input_shp_path}: {e.stderr}")
+        if os.path.exists(out_fnf_shp):
+            print(f"Skipping FNF processing for {input_shp_path} as it has already been processed.")
+        else:
+            try:
+                result = subprocess.run(
+                    ["python", "beam_pipeline.py", 
+                    "--input", str(input_shp_path), 
+                    "--output", str(out_fnf_shp), 
+                    "--model-config", str(args.fnf_config)],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                print(result.stdout)
+            except subprocess.CalledProcessError as e:
+                print(f"Error processing {input_shp_path}: {e.stderr}")
         
         # Run Change Detection model pipeline
-        try:
-        
-            result = subprocess.run(
-                ["python", "cd_inference_pipeline.py", 
-                    "--shapefile", str(input_shp_path), 
-                    "--model", str(args.cd_model), 
-                    "--outfile", str(out_cd_shp),
-                    "--configs", str(args.cd_configs),
-                    "--weights", str(args.cd_weights),
-                    "--t1start", str(args.cd_t1start),
-                    "--t2start", str(args.cd_t2start),
-                    "--t1end", str(args.cd_t1end),
-                    "--t2end", str(args.cd_t2end),
-                 ],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            print(result.stdout)
-        except subprocess.CalledProcessError as e:
-            print(f"Error processing {input_shp_path}: {e.stderr}")
+        if os.path.exists(out_cd_shp):
+             print(f"Skipping CD processing for {input_shp_path} as it has already been processed.")
+        else:
+            try:
+                result = subprocess.run(
+                    ["python", "cd_inference_pipeline.py", 
+                        "--shapefile", str(input_shp_path), 
+                        "--model", str(args.cd_model), 
+                        "--outfile", str(out_cd_shp),
+                        "--configs", str(args.cd_configs),
+                        "--weights", str(args.cd_weights),
+                        "--t1start", str(args.cd_t1start),
+                        "--t2start", str(args.cd_t2start),
+                        "--t1end", str(args.cd_t1end),
+                        "--t2end", str(args.cd_t2end),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                print(result.stdout)
+            except subprocess.CalledProcessError as e:
+                print(f"Error processing {input_shp_path}: {e.stderr}")
     
         # # merge both model inference shps together and save out
         # print(f"Merging: {out_fnf_shp}\n {out_cd_shp}")
@@ -153,10 +163,16 @@ def main():
         print(f"Merged the two shapefiles, saving to {out_final_file}")
         
         # remove the individual shapefiles
-        to_delete = [f for f in os.listdir(output_root) if '_both_models' not in f]
-        print(f'removing intmd files: {to_delete}')
-        for f in to_delete:
-            os.remove(output_root / Path(f))
+        if args.cleanup:
+            print(f"Cleaning up intermediate files for {input_shp_path}")
+            to_delete = [f for f in os.listdir(output_root) if '_both_models' not in f]
+            print(f'removing intmd files: {to_delete}')
+            for f in to_delete:
+                try:
+                    os.remove(output_root / Path(f))
+                except IsADirectoryError:
+                    shutil.rmtree(output_root / Path(f))
+            
 
 
 if __name__ == "__main__":

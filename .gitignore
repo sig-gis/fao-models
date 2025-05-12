@@ -1,4 +1,5 @@
 # data
+fao_models/batches
 data/
 tfrecords/
 logs/
