@@ -38,13 +38,16 @@ classes ={
 
 PROJECT = "pc530-fao-fra-rss"  # change to your cloud project name
 
-    ## INIT WITH HIGH VOLUME ENDPOINT
-credentials, _ = google.auth.default()
+# INIT WITH HIGH VOLUME ENDPOINT
+credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
 ee.Initialize(
     credentials,
     project=PROJECT,
     opt_url="https://earthengine-highvolume.googleapis.com"
 )
+if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ.keys():
+            logging.info(f"Earth Engine initialized at subprocess level with {credentials.signer_email}")
+
 
 def main():
 

@@ -76,15 +76,34 @@ def main():
                         action='store_true', 
                         help='Remove intermediate files after processing'
                         )
+    parser.add_argument('--sa-key',
+                        type=str, 
+                        required=False, 
+                        help='Path to the service account key file if running on a remote machine'
+                        )
+    
     args = parser.parse_args()
 
+    if args.sa_key: # setting the os.environ key will allow google.auth.default() to initilze EE w service account creds
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = args.sa_key
+        print(f"Using service account key: {args.sa_key}")
+        
+    # otherwise check that app default creds will be found at auth time
+    else:
+        ee_config_dir = Path.home() / ".config" / "earthengine" / "credentials"
+        try:
+            print(f"Will use app default creds found at {ee_config_dir}")
+
+        except FileNotFoundError as e:
+            print(e)
+            print("Please run `gcloud auth login` to set up your Earth Engine credentials.")
+    
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     inputs_txt = Path(args.inputs).resolve()
     # config = Path(args.config).resolve()
     output_root = Path(out_dir)
     output_root.mkdir(parents=True, exist_ok=True)
-
 
     with open(inputs_txt) as f:
         shps = f.readlines()

@@ -50,12 +50,14 @@ class GetPatch(beam.DoFn):
         import ee
         import google.auth
 
-        credentials, _ = google.auth.default()
+        credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         ee.Initialize(
             credentials,
             project="pc530-fao-fra-rss",
             opt_url="https://earthengine-highvolume.googleapis.com",
         )
+        if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ.keys():
+            logging.info(f"Earth Engine initialized at subprocess level with {credentials.signer_email}")
         return super().setup()
 
     def process(self, element):
