@@ -21,7 +21,7 @@ from model.util import build_change_detection_model
 from cd_utils import transform,get_landsat_composite, get_arr_from_geom_centr
 
 logging.basicConfig(
-    filename=f"change-detection-{datetime.datetime.now().strftime("%Y-%m-%d, %H:%M:%S")}.log",
+    filename=f"change-detection-{datetime.datetime.now().strftime('%Y-%m-%d, %H:%M:%S')}.log",
     encoding="utf-8",
     format="%(asctime)s - %(message)s",
     level=logging.INFO,

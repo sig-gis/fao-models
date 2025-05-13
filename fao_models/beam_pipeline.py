@@ -36,7 +36,7 @@ from beam_utils import parse_shp_to_latlon
 
 """
 logging.basicConfig(
-    filename=f"forest-classifier-beam-{datetime.datetime.now().strftime("%Y-%m-%d, %H:%M:%S")}.log",
+    filename=f"forest-classifier-beam-{datetime.datetime.now().strftime('%Y-%m-%d, %H:%M:%S')}.log",
     encoding="utf-8",
     format="%(asctime)s - %(message)s",
     level=logging.INFO,
