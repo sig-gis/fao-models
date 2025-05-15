@@ -10,6 +10,8 @@ depth: 12
 mlp_ratio: 4
 tubelet_size: 1
 
+resize_pos_embed: 32
+
 num_frames: 2
 
 input_bands:

@@ -21,6 +21,8 @@ def build_change_detection_model(encoder_config,decoder_config,model_checkpoint)
         num_frames=encoder_config['num_frames']
     )
 
+    # prithvi.load_encoder_weights_no_log()
+
     clf = MLPMTCls(
         encoder=prithvi,
         num_classes=decoder_config['num_classes'],
@@ -33,6 +35,9 @@ def build_change_detection_model(encoder_config,decoder_config,model_checkpoint)
     )
 
     ckpt = torch.load(model_checkpoint,map_location=torch.device('cpu'))
-    clf.load_state_dict(ckpt,strict=False)
+    
+    clf.load_state_dict(ckpt['model'])
+
+    clf.eval()
     
     return clf

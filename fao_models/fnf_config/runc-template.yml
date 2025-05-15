@@ -1,0 +1,18 @@
+experiment_name: <experiment-name>
+model_name: <model-func-name-from-models.py>
+data_dir: <tfrecords/train_test>
+val_data_dir: <tfrecords/val>
+checkpoint: <saved_models/model-name/best_model.h5>
+total_examples: 70000 # number of examples in dataset (at data_dir)
+test_split: null # float or null
+
+optimizer: adam 
+optimizer_use_lr_schedular: true
+loss_function: binary_crossentropy
+
+epochs: 15
+learning_rate: 0.01
+batch_size: 100
+buffer_size: 70000
+
+early_stopping_patience: 5 # null or int

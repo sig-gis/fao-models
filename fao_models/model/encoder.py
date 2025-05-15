@@ -243,6 +243,22 @@ class Prithvi_Encoder(Encoder):
         self.load_state_dict(pretrained_encoder, strict=False)
         self.parameters_warning(missing, incompatible_shape, logger)
 
+    def load_encoder_weights_no_log(self) -> None:
+        pretrained_model = torch.load(self.encoder_weights, map_location="cpu")
+        k = pretrained_model.keys()
+        pretrained_encoder = {}
+        incompatible_shape = {}
+        missing = {}
+        for name, param in self.named_parameters():
+            if name not in k:
+                missing[name] = param.shape
+            elif pretrained_model[name].shape != param.shape:
+                incompatible_shape[name] = (param.shape, pretrained_model[name].shape)
+            else:
+                pretrained_encoder[name] = pretrained_model[name]
+
+        self.load_state_dict(pretrained_encoder, strict=False)
+
     def freeze(self):
         for param in self.parameters():
             param.requires_grad = False

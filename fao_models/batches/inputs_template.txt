@@ -1,0 +1,2 @@
+data/inference/NEW_COUNTRY/NEW_COUNTRY_NEW_centroids.shp
+data/inference/NEW_COUNTRY/NEW_COUNTRY_OLD_centroids.shp
