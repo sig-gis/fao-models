@@ -1,8 +1,0 @@
-name: faomodels-tf
-channels:
-  - defaults
-dependencies:
-  - geopandas
-  - python=3.12
-  - earthengine-api
-prefix: /home/kyle/miniconda3/envs/faomodels-tf
