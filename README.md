@@ -13,6 +13,12 @@ This repo contains our two models for production:
 In a new virtual environment, install dependencies using provided requirements.txt when at repo root
 `pip install -r requirements.txt`
 
+You will also need to download the CD models' checkpoint.pth file from GCS. If you get permission denied error, reach out to Kyle (kwoodward@sig-gis.com).
+
+```bash
+gcloud storage cp gs://forest-nonforest/models/change_detection_model/checkpoint__best.pth fao_models/model/checkpoint__best.pth
+```
+
 ### Inference
 
 Using [beam_batcher.py](fao_models/beam_batcher.py) allows you to run both models' inference pipelines in succession for each input Shapefile in a `inputs_list.txt`, appending their predictions to one final Shapefile. 

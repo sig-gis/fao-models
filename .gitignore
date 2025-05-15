@@ -1,5 +1,6 @@
 # data
-fao_models/batches
+fao_models/batches/*.txt
+!fao_models/batches/inputs_template.txt
 data/
 tfrecords/
 logs/
@@ -8,11 +9,9 @@ logs/
 *.tiff
 *.tfrecord.gz
 
-# models
-saved_models/*
-*.pt
-*.pth
+# models (Prithvi base .pt is large but model loading code automatically downloads it, our checkpoint.pt is large but don't want to provide public access
 fao_models/predictions
+fao_models/model/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
