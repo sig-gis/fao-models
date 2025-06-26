@@ -11,7 +11,7 @@ def parse_shp_to_latlon(file,id_field:str='PLOTID'):
     gdf.loc[:,'lonlat'] = gdf.centroid.apply(lambda x: [x.x, x.y])
     return gdf[[id_field, 'lonlat']].values.tolist()
 
-def get_ee_img(coords):
+def get_ee_img(coords,year):
     """retrieve s2 image composite from ee at given coordinates. coords is a tuple of (lon, lat) in degrees."""
     ## MAKE S2 COMPOSITE IN HEXAGONS ##########################################
     # Using Cloud Score + for cloud/cloud-shadow masking
@@ -31,7 +31,7 @@ def get_ee_img(coords):
 
     # Make a clear median composite.
     sampleImage = (
-        s2.filterDate("2023-01-01", "2023-12-31")
+        s2.filterDate(f"{year}-01-01", f"{year}-12-31")
         .filterBounds(ee.Geometry.Point(coords[0], coords[1]).buffer(64*10)) # only images touching 64 pixel centroid buffer
         .linkCollection(csPlus, [QA_BAND])
         .map(lambda img: img.updateMask(img.select(QA_BAND).gte(CLEAR_THRESHOLD)))

@@ -35,21 +35,27 @@ from beam_utils import parse_shp_to_latlon
 8. save the geodataframe as a shapefile
 
 """
+os.makedirs("log", exist_ok=True)
 logging.basicConfig(
-    filename=f"forest-classifier-beam-{datetime.datetime.now().strftime('%Y-%m-%d, %H:%M:%S')}.log",
+    filename=f"log/forest-classifier-beam-{datetime.datetime.now().strftime('%Y-%m-%d, %H:%M:%S')}.log",
     encoding="utf-8",
     format="%(asctime)s - %(message)s",
     level=logging.INFO,
 )
-
+logging.info("Starting Forest/Non-Forest Inference Pipeline")
 class GetPatch(beam.DoFn):
-    def __init__(self):
+    def __init__(self, config_path):
+        from common import load_yml
+
+        # from _types import Config # Config was a dataclass subclass in Johns repo that type casts the yml file loaded..
+
+        self._config = load_yml(config_path)
         super().__init__()
 
     def setup(self):
         import ee
         import google.auth
-
+        logging.info("Setting up Earth Engine for high volume endpoint")
         credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         ee.Initialize(
             credentials,
@@ -66,8 +72,8 @@ class GetPatch(beam.DoFn):
         # element is a tuple of (global_id, [lon,lat])
         global_id = element[0]
         coords = element[1]
-        logging.info(f"Getting Imagery for {global_id} at {coords}")
-        image = get_ee_img(coords)
+        logging.info(f"Getting Imagery for {global_id} at {coords} for year {self._config['fnf']['year']}")
+        image = get_ee_img(coords,self._config["fnf"]["year"])
         patch = get_patch_numpy(coords, image)
         patch_tensor = to_tensor(patch)
 
@@ -91,12 +97,12 @@ class Predict(beam.DoFn):
     def setup(self):
         # load the model
         from models import load_predict_model
-
+        logging.info(f"Loading model {self._config['fnf']['model_name']} from weights {self._config['fnf']['weights']} with optimizer {self._config['fnf']['optimizer']} and loss function {self._config['fnf']['loss_function']}")
         self.model = load_predict_model(
-            model_name=self._config["model_name"],
-            optimizer=self._config["optimizer"],
-            loss_fn=self._config["loss_function"],
-            weights=self._config["checkpoint"],
+            model_name=self._config["fnf"]["model_name"],
+            optimizer=self._config["fnf"]["optimizer"],
+            loss_fn=self._config["fnf"]["loss_function"],
+            weights=self._config["fnf"]["weights"],
         )
 
         return super().setup()
@@ -192,7 +198,7 @@ def pipeline(dotargs: SimpleNamespace):
         forest_pipeline = (
             p
             | "Construct PCollection" >> beam.Create(pColl)
-            | "Get Patch" >> beam.ParDo(GetPatch())
+            | "Get Patch" >> beam.ParDo(GetPatch(config_path=dotargs.model_config))
             | "Predict" >> beam.ParDo(Predict(config_path=dotargs.model_config))
             | "Dict To CSV String" >> beam.ParDo(DictToCSVString(cols))
             | "Write String To CSV" >> WriteToText(dotargs.output, header=",".join(cols))
