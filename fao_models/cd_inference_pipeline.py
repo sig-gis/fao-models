@@ -20,13 +20,14 @@ import pandas as pd
 from model.util import build_change_detection_model
 from cd_utils import transform,get_landsat_composite, get_arr_from_geom_centr
 
+os.makedirs("log", exist_ok=True)
 logging.basicConfig(
-    filename=f"change-detection-{datetime.datetime.now().strftime('%Y-%m-%d, %H:%M:%S')}.log",
+    filename=f"log/change-detection-{datetime.datetime.now().strftime('%Y-%m-%d, %H:%M:%S')}.log",
     encoding="utf-8",
     format="%(asctime)s - %(message)s",
     level=logging.INFO,
 )
-
+logging.info("Starting Change Detection Inference Pipeline")
 means = np.array([0.05278337,0.08498019,0.10346901,0.2802707,0.25964622 ,0.16640756])
 stds = np.array([0.03278688, 0.05424733 ,0.08996119 ,0.07969411 ,0.12222017 ,0.12167657])
 classes ={
@@ -36,6 +37,7 @@ classes ={
     'Forest Gain': 3,
 }
 
+logging.info("Setting Up Earth Engine for high volume endpoint")
 PROJECT = "pc530-fao-fra-rss"  # change to your cloud project name
 
 # INIT WITH HIGH VOLUME ENDPOINT
@@ -52,37 +54,39 @@ if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ.keys():
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--shapefile", "-s", type=str, required=True)
-    parser.add_argument('--model','-m',type=str,required=True)
-    parser.add_argument("--outfile", "-o", type=str, required=True)
-    parser.add_argument("--configs", "-c", type=str, required=True)
-    parser.add_argument("--weights",'-w',type=str,required=True)
-    parser.add_argument('--t1start',type=str,required=True)
-    parser.add_argument('--t2start',type=str,required=True)
-    parser.add_argument('--t1end',type=str,required=True)
-    parser.add_argument('--t2end',type=str,required=True)
+    parser.add_argument("--config", "-c", type=str, required=True, help="Path to the configuration file")
+    parser.add_argument("--input", "-s", type=str, required=True)
+    parser.add_argument("--output", "-o", type=str, required=True)
     
     args = parser.parse_args()
 
-    
     gsd = 10
     size = 32
     
-    shapefile_path = args.shapefile
+    shapefile_path = args.input
     features = gpd.read_file(shapefile_path)
 
-    with open(os.path.join(args.configs,f'{args.model}.yaml'),'r') as encoder_file:
+    with open(args.config, 'r') as config_file:
+        config = yaml.safe_load(config_file)
+    with open(config['cd']['encoder'], 'r') as encoder_file:
         encoder_config = yaml.safe_load(encoder_file)
-    with open(os.path.join(args.configs,'cls_linear_mt_ltae.yaml'),'r') as decoder_file:
+    with open(config['cd']['decoder'], 'r') as decoder_file:
         decoder_config = yaml.safe_load(decoder_file)
     
+    weights = config['cd']['weights']
+    t1start = config['cd']['t1start']
+    t1end = config['cd']['t1end']
+    t2start = config['cd']['t2start']
+    t2end = config['cd']['t2end']
+
     # load model
-    model = build_change_detection_model(encoder_config,decoder_config,args.weights)
+    logging.info(f"Loading model with encoder: {config['cd']['encoder']}, decoder: {config['cd']['decoder']}, weights: {weights}")
+    model = build_change_detection_model(encoder_config,decoder_config,weights)
 
     plotids = []
     preds = []
     confs = []
-    for i in tqdm.tqdm(transform(features,args.t1start,args.t1end,args.t2start,args.t2end)):
+    for i in tqdm.tqdm(transform(features,t1start,t1end,t2start,t2end)):
 
         plotid = i['PLOTID']
         geometry = i['geometry']
@@ -141,10 +145,10 @@ def main():
 
     joined = features.merge(preds,on='PLOTID')
     
-    Path(args.outfile).parent.mkdir(parents=True,exist_ok=True)
-    joined.to_file(args.outfile,driver='ESRI Shapefile')
+    Path(args.output).parent.mkdir(parents=True,exist_ok=True)
+    joined.to_file(args.output,driver='ESRI Shapefile')
     
-    logging.info(f'Predictions Saved to {args.outfile}')
+    logging.info(f'Predictions Saved to {args.output}')
 
 if __name__ == "__main__":
     main()

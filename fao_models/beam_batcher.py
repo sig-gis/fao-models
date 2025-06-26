@@ -21,57 +21,13 @@ def main():
                         help='Output directory for the processed shapefiles'
                         )
     
-    # Forest/Non-Forest args
-    parser.add_argument('--fnf-config', 
+    parser.add_argument('--config', 
                         type=str, 
                         required=True, 
-                        default='./_config/runc-resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all.yml', 
-                        help='Path to the Forest/NonForest model configuration file'
+                        default='configs/inference23.yml', 
+                        help='Path to the inference config file'
                         )
 
-    # Change Detection args
-    parser.add_argument('--cd-configs', 
-                        type=str, 
-                        required=True, 
-                        default='./configs/', 
-                        help='Path to the change-detection configs directory'
-                        )
-    parser.add_argument('--cd-model', 
-                        type=str, 
-                        required=True, 
-                        default='prithvi', 
-                        help='base encoder model for change detection model'
-                        )
-    parser.add_argument('--cd-weights', 
-                        type=str, 
-                        required=True, 
-                        default='./model/checkpoint__best.pth', 
-                        help='Path to the change-detection model checkpoint weights'
-                        )
-    parser.add_argument('--cd-t1start', 
-                        type=str, 
-                        required=False, 
-                        default= '2018-01-01',
-                        help='Start date for the first time period for change detection'
-                        )
-    parser.add_argument('--cd-t1end', 
-                        type=str, 
-                        required=False, 
-                        default= '2018-12-31',
-                        help='End date for the first time period for change detection'
-                        )
-    parser.add_argument('--cd-t2start', 
-                        type=str, 
-                        required=False, 
-                        default= '2023-01-01',
-                        help='Start date for the second time period for change detection'
-                        )
-    parser.add_argument('--cd-t2end', 
-                        type=str, 
-                        required=False, 
-                        default= '2023-12-31',
-                        help='End date for the second time period for change detection'
-                        )
     parser.add_argument('--cleanup',
                         action='store_true', 
                         help='Remove intermediate files after processing'
@@ -130,7 +86,7 @@ def main():
                     ["python", "beam_pipeline.py", 
                     "--input", str(input_shp_path), 
                     "--output", str(out_fnf_shp), 
-                    "--model-config", str(args.fnf_config)],
+                    "--model-config", str(args.config)],
                     check=True,
                     capture_output=True,
                     text=True
@@ -146,15 +102,9 @@ def main():
             try:
                 result = subprocess.run(
                     ["python", "cd_inference_pipeline.py", 
-                        "--shapefile", str(input_shp_path), 
-                        "--model", str(args.cd_model), 
-                        "--outfile", str(out_cd_shp),
-                        "--configs", str(args.cd_configs),
-                        "--weights", str(args.cd_weights),
-                        "--t1start", str(args.cd_t1start),
-                        "--t2start", str(args.cd_t2start),
-                        "--t1end", str(args.cd_t1end),
-                        "--t2end", str(args.cd_t2end),
+                        "--input", str(input_shp_path), 
+                        "--output", str(out_cd_shp), 
+                        "--config", str(args.config),
                     ],
                     check=True,
                     capture_output=True,
