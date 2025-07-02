@@ -1,17 +1,14 @@
 # data
 fao_models/batches/*.txt
 !fao_models/batches/inputs_template.txt
-data/
-tfrecords/
-logs/
-/**/*.png
-*.tif
-*.tiff
-*.tfrecord.gz
+fao_models/data
+fao_models/fao_models/test_data
+fao_models/data/training
 
-# models (Prithvi base .pt is large but model loading code automatically downloads it, our checkpoint.pt is large but don't want to provide public access
-fao_models/predictions
-fao_models/model/*
+# Model weights and large files
+fao_models/fao_models/model/Prithvi_EO_V1_100M.pt
+fao_models/fao_models/model/checkpoint__best.pth
+fao_models/fao_models/saved_models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

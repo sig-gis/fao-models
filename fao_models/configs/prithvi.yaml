@@ -1,4 +1,4 @@
-encoder_weights: ./model/Prithvi_EO_V1_100M.pt
+encoder_weights: fao_models/fao_models/model/Prithvi_EO_V1_100M.pt
 download_url: https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-1.0-100M/resolve/main/Prithvi_EO_V1_100M.pt?download=true
 
 embed_dim: 768

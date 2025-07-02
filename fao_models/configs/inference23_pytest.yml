@@ -1,0 +1,17 @@
+fnf:
+  model_name: resnet
+  weights: fao_models/fao_models/saved_models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5
+  optimizer: adam
+  loss_function: binary_crossentropy
+  year: '2023'
+
+cd:
+  # configs: ./configs/
+  encoder: fao_models/configs/prithvi.yaml
+  decoder: fao_models/configs/cls_linear_mt_ltae.yaml
+  weights: fao_models/fao_models/model/checkpoint__best.pth
+  t1start: '2018-01-01'
+  t1end: '2018-12-31'
+  t2start: '2023-01-01'
+  t2end: '2023-12-31'
+                  
