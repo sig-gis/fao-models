@@ -99,12 +99,9 @@ def main():
 
         arr1 = get_arr_from_geom_centr(image=image1, geom=geometry, gsd=gsd, size=size)
         arr1_normed = (arr1 - means[:,None,None]) / stds[:,None,None]
-        print(arr1_normed.shape)
-
 
         arr2 = get_arr_from_geom_centr(image=image2, geom=geometry, gsd=gsd, size=size)
         arr2_normed = (arr2 - means[:,None,None]) / stds[:,None,None]
-        print(arr2_normed.shape)
 
         arr1_normed = arr1_normed.astype(np.float32)
         arr2_normed = arr2_normed.astype(np.float32)
@@ -112,18 +109,12 @@ def main():
         input = torch.from_numpy(np.stack([arr1_normed,arr2_normed]))
         input = input.unsqueeze(0)
         input = torch.permute(input,(0,2,1,3,4))
-        print(input.shape)
         
         pred = model({'optical':input})
         pred_index = np.argmax(pred.detach().numpy())
 
         cls = list(classes.keys())[pred_index]
-        # print(plotid)
-        # print(pred)
-        # print(cls)
-        # print(pred_index)
-    
-
+       
         plotids.append(plotid)
         preds.append(cls)
         confs.append(pred.detach().numpy())
@@ -131,7 +122,6 @@ def main():
 
 
     confs_matrix = np.concatenate(confs,axis=0)
-    # print(confs_matrix.shape)
 
     preds = pd.DataFrame.from_dict({
         'PLOTID':plotids,

@@ -7,18 +7,13 @@ import geopandas as gpd
 import shutil
 
 def main():
-    parser = argparse.ArgumentParser(description="Batcher for running multiple beam_pipeline.py instances")
+    parser = argparse.ArgumentParser(description="Runs FNF and CD inference pipelines for each input SHP listed in the --inputs text file")
     
     # I/O args
     parser.add_argument('--inputs', 
                         type=str, 
                         required=True, 
                         help='Path to the input text file containing shapefiles'
-                        )
-    parser.add_argument('--out_dir', 
-                        type=str, 
-                        required=True, 
-                        help='Output directory for the processed shapefiles'
                         )
     
     parser.add_argument('--config', 
@@ -54,37 +49,33 @@ def main():
             print(e)
             print("Please run `gcloud auth login` to set up your Earth Engine credentials.")
     
-    out_dir = Path(args.out_dir).resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
     inputs_txt = Path(args.inputs).resolve()
-    # config = Path(args.config).resolve()
-    output_root = Path(out_dir)
-    output_root.mkdir(parents=True, exist_ok=True)
 
     with open(inputs_txt) as f:
         shps = f.readlines()
         shps = [shp.rstrip('\n') for shp in shps]
 
     for input_shp in tqdm.tqdm(shps):
-        input_shp_path = Path(input_shp).resolve()
-        print(f"input_shp: {input_shp_path}")
-        
-        input_shp_with_fnf_suffix = input_shp_path.stem + "_fnf.shp"
-        out_fnf_shp = output_root / input_shp_with_fnf_suffix
-        print(f"output fnf shp: {out_fnf_shp}")
 
-        input_shp_with_cd_suffix = input_shp_path.stem + "_cd.shp"
-        out_cd_shp = output_root / input_shp_with_cd_suffix
-        print(f"output cd shp: {out_cd_shp}")        
+        out_fnf_shp = input_shp.replace(".shp","_fnf.shp")
+        out_cd_shp = input_shp.replace(".shp", "_cd.shp")
+        out_final_file =  input_shp.replace(".shp","_both_models.shp")
+        input_shp, out_fnf_shp, out_cd_shp, out_final_file = [Path(path).absolute() for path in [input_shp,out_fnf_shp, out_cd_shp, out_final_file]] 
         
+        print(f"input_shp: {input_shp}")
+        print(f"output fnf shp: {out_fnf_shp}")
+        print(f"output cd shp: {out_cd_shp}")     
+        print(f"output final shp: {out_final_file}")
+
         # Run FNF model pipeline
-        if os.path.exists(out_fnf_shp):
-            print(f"Skipping FNF processing for {input_shp_path} as it has already been processed.")
+        if os.path.exists(out_final_file):
+            print(f"Skipping processing for {input_shp} as it has already been processed.")
+            continue
         else:
             try:
                 result = subprocess.run(
-                    ["python", "beam_pipeline.py", 
-                    "--input", str(input_shp_path), 
+                    ["python", "fao_models/beam_pipeline.py", 
+                    "--input", str(input_shp), 
                     "--output", str(out_fnf_shp), 
                     "--model-config", str(args.config)],
                     check=True,
@@ -93,16 +84,12 @@ def main():
                 )
                 print(result.stdout)
             except subprocess.CalledProcessError as e:
-                print(f"Error processing {input_shp_path}: {e.stderr}")
+                print(f"Error processing {input_shp} through FNF model: {e.stderr}")
         
-        # Run Change Detection model pipeline
-        if os.path.exists(out_cd_shp):
-             print(f"Skipping CD processing for {input_shp_path} as it has already been processed.")
-        else:
             try:
                 result = subprocess.run(
-                    ["python", "cd_inference_pipeline.py", 
-                        "--input", str(input_shp_path), 
+                    ["python", "fao_models/cd_inference_pipeline.py", 
+                        "--input", str(input_shp), 
                         "--output", str(out_cd_shp), 
                         "--config", str(args.config),
                     ],
@@ -112,35 +99,33 @@ def main():
                 )
                 print(result.stdout)
             except subprocess.CalledProcessError as e:
-                print(f"Error processing {input_shp_path}: {e.stderr}")
+                print(f"Error processing {input_shp} through CD model: {e.stderr}")
     
-        # # merge both model inference shps together and save out
-        # print(f"Merging: {out_fnf_shp}\n {out_cd_shp}")
-        # merge the two shapefiles
-        out_fnf_df = gpd.read_file(out_fnf_shp)
-        out_fnf_df.loc[:,'PLOTID'] = out_fnf_df['PLOTID'].astype(int)
+            # merge both model inference shps together and save out
+            out_fnf_df = gpd.read_file(out_fnf_shp)
+            out_fnf_df.loc[:,'PLOTID'] = out_fnf_df['PLOTID'].astype(int)
 
-        out_cd_df = gpd.read_file(out_cd_shp)
-        out_cd_df.loc[:,'PLOTID'] = out_cd_df['PLOTID'].astype(int)
+            out_cd_df = gpd.read_file(out_cd_shp)
+            out_cd_df.loc[:,'PLOTID'] = out_cd_df['PLOTID'].astype(int)
 
-        both_models_df = out_fnf_df.merge(out_cd_df,left_on='PLOTID',right_on='PLOTID')
-        both_models_df = both_models_df.drop(columns=['SAMPLEID_y','geometry_y'])
-        both_models_df = both_models_df.rename(columns={'SAMPLEID_x':'SAMPLEID','geometry_x':'geometry'})
-        
-        out_final_file = output_root / f"{input_shp_path.stem}_both_models.shp"
-        both_models_df.to_file(out_final_file)
-        print(f"Merged the two shapefiles, saving to {out_final_file}")
-        
-        # remove the individual shapefiles
-        if args.cleanup:
-            print(f"Cleaning up intermediate files for {input_shp_path}")
-            to_delete = [f for f in os.listdir(output_root) if '_both_models' not in f]
-            print(f'removing intmd files: {to_delete}')
-            for f in to_delete:
-                try:
-                    os.remove(output_root / Path(f))
-                except IsADirectoryError:
-                    shutil.rmtree(output_root / Path(f))
+            both_models_df = out_fnf_df.merge(out_cd_df,left_on='PLOTID',right_on='PLOTID')
+            both_models_df = both_models_df.drop(columns=['SAMPLEID_y','geometry_y'])
+            both_models_df = both_models_df.rename(columns={'SAMPLEID_x':'SAMPLEID','geometry_x':'geometry'})
+            
+            both_models_df.to_file(out_final_file)
+            print(f"Merged the two shapefiles, saving to {out_final_file}")
+            
+            # remove the individual shapefiles
+            if args.cleanup:
+                print(f"Cleaning up intermediate files for {input_shp}")
+                parent = os.path.dirname(input_shp)
+                to_delete = [f for f in os.listdir(parent) if "fnf" in f or "cd" in f]
+                print(f'removing intmd files: {to_delete}')
+                for f in to_delete:
+                    try:
+                        os.remove(os.path.join(parent,f))
+                    except IsADirectoryError:
+                        shutil.rmtree(os.path.join(parent,f))
             
 
 
