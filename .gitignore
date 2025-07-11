@@ -10,6 +10,9 @@ fao_models/fao_models/model/Prithvi_EO_V1_100M.pt
 fao_models/fao_models/model/checkpoint__best.pth
 fao_models/fao_models/saved_models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5
 
+# Ignore generated credentials from google-github-actions/auth
+gha-creds-*.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 private/

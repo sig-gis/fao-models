@@ -3,7 +3,7 @@ on:
         branches:
             - api
 
-name: Linux build
+name: Tests
 jobs:
     py-check:
         runs-on: ${{ matrix.config.os }}
@@ -26,6 +26,19 @@ jobs:
               run: |
                   pip install --user -r requirements.txt
                   pip install .
+            
+            - name: gcloud auth
+              uses: 'google-github-actions/auth@v2'
+              with:
+                project_id: 'pc530-fao-fra-rss'
+                credentials-json: {{ secrets.GCP_SERVICE_ACCOUNT_KEY }} 
+
+            - name: Download weights
+              run: |
+                  mkdir -p -v fao_models/fao_models/saved_models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all
+                  gcloud storage cp ::maskgs://forest-nonforest/models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5 fao_models/fao_models/saved_models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5
+                  gcloud storage cp gs://forest-nonforest/models/change_detection_model/checkpoint__best.pth fao_models/fao_models/model/checkpoint__best.pth
+
             - name: Run Tests
               run: |
                   pytest
