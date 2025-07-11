@@ -31,7 +31,7 @@ jobs:
               uses: 'google-github-actions/auth@v2'
               with:
                 project_id: 'pc530-fao-fra-rss'
-                credentials-json: {{ secrets.GCP_SERVICE_ACCOUNT_KEY }} 
+                credentials-json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }} 
 
             - name: Download weights
               run: |
