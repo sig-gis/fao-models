@@ -36,7 +36,7 @@ jobs:
             - name: Download weights
               run: |
                   mkdir -p -v fao_models/fao_models/saved_models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all
-                  gcloud storage cp ::maskgs://forest-nonforest/models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5 fao_models/fao_models/saved_models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5
+                  gcloud storage cp gs://forest-nonforest/models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5 fao_models/fao_models/saved_models/resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all/best_model.h5
                   gcloud storage cp gs://forest-nonforest/models/change_detection_model/checkpoint__best.pth fao_models/fao_models/model/checkpoint__best.pth
 
             - name: Run Tests
