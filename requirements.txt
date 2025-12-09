@@ -25,3 +25,5 @@ yacs
 wandb
 hydra-core
 wheel
+numpy<2
+apache-beam==2.60.0

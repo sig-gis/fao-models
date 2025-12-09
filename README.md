@@ -27,11 +27,10 @@ Here is an example:
 Run beam_batcher on several input Shapefiles defined in `batches/inputs_test.txt`, output each Shapefile with model predictions to a new directory `test_preds`
 
 ```bash
-cd fao_models
-python beam_batcher.py --inputs batches/inputs_test.txt --out_dir data/inference/test_preds --fnf-config fnf_config/runc-resnet-epochs20-batch64-lr001-seed5-lrdecay5-tfrecords-all.yml --cd-configs configs/ --cd-model prithvi --cd-weights model/checkpoint__best.pth --cd-t1start 2018-01-01 --cd-t1end 2018-12-31 --cd-t2start 2023-01-01 --cd-t2end 2023-12-31 --cleanup
+python fao_models/beam_batcher.py --inputs fao_models/batches/inputs_RUS.txt --config fao_models/configs/inference23.yml --cleanup
 ```
 
-* If running inference with the current models and for inference year 2023, only flags you need to change are `--inputs` and `--out_dir`. 
+* If running inference with the current models and for inference year 2023, only flag you need to change is `--inputs`
 * See [`batches/inputs_template.txt`](/fao_models/batches/inputs_template.txt) for an example of what to provide to `--inputs`. 
 * For FNF model, inference year is hard-coded to 2023. (TODO fix this in [`beam_utils.get_ee_img()`](fao_models/beam_utils.py))
 * For CD model, you can change the image time windowing provided to model inference by with the 4 `--cd-t*` flags. 

@@ -9,6 +9,7 @@ from shapely import Point
 import shapely
 import rasterio
 from rasterio.transform import from_bounds
+import torch
 
 
 classes ={
@@ -235,6 +236,28 @@ def get_patch_numpy(coords, image, format="NPY"):
     request["grid"]["affineTransform"]["translateX"] = coords[0] + OFFSET_X
     request["grid"]["affineTransform"]["translateY"] = coords[1] + OFFSET_Y
     return np.load(io.BytesIO(ee.data.computePixels(request)))
+
+def get_cd_data(geometry,t1start,t1end,t2start,t2end):    
+    means = np.array([0.05278337,0.08498019,0.10346901,0.2802707,0.25964622 ,0.16640756])
+    stds = np.array([0.03278688, 0.05424733 ,0.08996119 ,0.07969411 ,0.12222017 ,0.12167657])
+      
+    
+    image1 = get_landsat_composite(region=geometry, start=t1start, end=t1end)
+    image2 = get_landsat_composite(region=geometry, start=t2start, end=t2end)
+
+    arr1 = get_arr_from_geom_centr(image=image1, geom=geometry, gsd=10, size=32)
+    arr1_normed = (arr1 - means[:,None,None]) / stds[:,None,None]
+
+    arr2 = get_arr_from_geom_centr(image=image2, geom=geometry, gsd=10, size=32)
+    arr2_normed = (arr2 - means[:,None,None]) / stds[:,None,None]
+
+    arr1_normed = arr1_normed.astype(np.float32)
+    arr2_normed = arr2_normed.astype(np.float32)
+
+    input = torch.from_numpy(np.stack([arr1_normed,arr2_normed]))
+    input = input.unsqueeze(0)
+    input = torch.permute(input,(0,2,1,3,4))
+    return input
 
 def to_tensor(patch):
     """

@@ -48,7 +48,7 @@ def main():
         except FileNotFoundError as e:
             print(e)
             print("Please run `gcloud auth login` to set up your Earth Engine credentials.")
-    
+    print('Working directory:', os.getcwd())
     inputs_txt = Path(args.inputs).resolve()
 
     with open(inputs_txt) as f:
@@ -67,7 +67,7 @@ def main():
         print(f"output cd shp: {out_cd_shp}")     
         print(f"output final shp: {out_final_file}")
 
-        # Run FNF model pipeline
+        # # Run FNF model pipeline
         if os.path.exists(out_final_file):
             print(f"Skipping processing for {input_shp} as it has already been processed.")
             continue
